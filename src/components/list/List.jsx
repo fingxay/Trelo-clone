@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import Card from "../Card"
+import Card from "./Card"
 import AddCard from "./AddCard"
 import ListMenu from "./ListMenu"
 
 function List({
   list,
+  listIndex,
+  totalLists,
   onAddCard,
   onRenameList,
-  onCopyList, // ✅ NHẬN TỪ BOARD
+  onCopyList,
+  onMoveList,
 }) {
   const { id, title, cards } = list
 
@@ -162,7 +165,9 @@ function List({
       {menuPosition && (
         <ListMenu
           position={menuPosition}
-          listTitle={title}          // 👈 BẮT BUỘC
+          listTitle={title}
+          listIndex={listIndex}
+          totalLists={totalLists}
           onClose={() => setMenuPosition(null)}
           onAddCard={() => {
             setMenuPosition(null)
@@ -170,7 +175,11 @@ function List({
           }}
           onCopyList={(newTitle) => {
             setMenuPosition(null)
-            onCopyList?.(list, newTitle) // 👈 đúng flow
+            onCopyList?.(list, newTitle)
+          }}
+          onMoveList={(toIndex) => {
+            setMenuPosition(null)
+            onMoveList?.(list.id, toIndex)
           }}
         />
       )}

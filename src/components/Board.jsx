@@ -2,8 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import mockBoard from "../data/mockBoard"
 import List from "./list/List"
 
+const BOARD_STORAGE_KEY = "trello-clone-board"
+
 function Board() {
-  const [board, setBoard] = useState(mockBoard)
+  const [board, setBoard] = useState(() => {
+    try {
+      const savedBoard = localStorage.getItem(BOARD_STORAGE_KEY)
+      return savedBoard ? JSON.parse(savedBoard) : mockBoard
+    } catch {
+      return mockBoard
+    }
+  })
 
   const [isAddingList, setIsAddingList] = useState(false)
   const [newListTitle, setNewListTitle] = useState("")
@@ -13,7 +22,10 @@ function Board() {
 
   const { title, lists } = board
 
-  /* ===== ADD CARD ===== */
+  useEffect(() => {
+    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board))
+  }, [board])
+
   const handleAddCard = useCallback((listId, cardTitle) => {
     setBoard((prev) => ({
       ...prev,
@@ -31,7 +43,6 @@ function Board() {
     }))
   }, [])
 
-  /* ===== RENAME LIST ===== */
   const handleRenameList = useCallback((listId, newTitle) => {
     setBoard((prev) => ({
       ...prev,
@@ -41,7 +52,6 @@ function Board() {
     }))
   }, [])
 
-  /* ===== COPY LIST ===== */
   const handleCopyList = useCallback((sourceList, newTitle) => {
     setBoard((prev) => {
       const index = prev.lists.findIndex((l) => l.id === sourceList.id)
@@ -63,7 +73,6 @@ function Board() {
     })
   }, [])
 
-  /* ===== MOVE LIST (CORE – DÙNG CHO DRAG & DROP SAU NÀY) ===== */
   const handleMoveList = useCallback((listId, toIndex) => {
     setBoard((prev) => {
       const fromIndex = prev.lists.findIndex((l) => l.id === listId)
@@ -78,7 +87,6 @@ function Board() {
     })
   }, [])
 
-  /* ===== ADD LIST ===== */
   const resetAddList = useCallback(() => {
     setIsAddingList(false)
     setNewListTitle("")
@@ -106,14 +114,12 @@ function Board() {
     resetAddList()
   }, [newListTitle, resetAddList])
 
-  /* auto focus */
   useEffect(() => {
     if (isAddingList && inputRef.current) {
       inputRef.current.focus()
     }
   }, [isAddingList])
 
-  /* ESC + click outside (ADD LIST) */
   useEffect(() => {
     if (!isAddingList) return
 
@@ -139,12 +145,10 @@ function Board() {
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
-      {/* Top bar */}
       <div className="h-12 shrink-0 flex items-center px-4 text-white font-semibold bg-black/30 backdrop-blur">
         {title}
       </div>
 
-      {/* ===== BOARD SCROLL ===== */}
       <div className="flex-1 overflow-hidden">
         <div className="h-full flex gap-4 p-4 overflow-x-auto items-start">
           {lists.map((list, index) => (

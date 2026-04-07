@@ -20,20 +20,20 @@ function ListMenu({
   onClose,
   onAddCard,
   onCopyList,
+  onMoveList,
   listTitle,
+  listIndex = 0,
+  totalLists = 1,
 }) {
   const menuRef = useRef(null)
 
-  const [view, setView] = useState("menu") // menu | copy | move
-
+  const [view, setView] = useState("menu")
   const [isWatching, setIsWatching] = useState(false)
   const [showColors, setShowColors] = useState(false)
   const [showAutomation, setShowAutomation] = useState(false)
   const [selectedColor, setSelectedColor] = useState(null)
+  const [movePosition, setMovePosition] = useState(listIndex + 1)
 
-  const [movePosition, setMovePosition] = useState(1)
-
-  /* ===== CLICK OUTSIDE + ESC ===== */
   useEffect(() => {
     function handleMouseDown(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -65,13 +65,13 @@ function ListMenu({
       style={{ top: position.top, left: position.left }}
       className="fixed w-72 bg-[#1D2125] rounded-xl shadow-2xl border border-white/10 z-[9999]"
     >
-      {/* ===== HEADER ===== */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
         <span className="text-sm font-semibold text-white">
           {view === "menu" && "Thao tác"}
           {view === "copy" && "Sao chép danh sách"}
           {view === "move" && "Di chuyển danh sách"}
         </span>
+
         <button
           onClick={() => {
             if (view !== "menu") setView("menu")
@@ -83,7 +83,6 @@ function ListMenu({
         </button>
       </div>
 
-      {/* ===== MENU VIEW ===== */}
       {view === "menu" && (
         <div className="py-2 text-sm text-white/80">
           <MenuItem
@@ -95,15 +94,16 @@ function ListMenu({
             Thêm thẻ
           </MenuItem>
 
-          <MenuItem
-            onClick={() => {
-              setView("copy")
-            }}
-          >
+          <MenuItem onClick={() => setView("copy")}>
             Sao chép danh sách
           </MenuItem>
 
-          <MenuItem onClick={() => setView("move")}>
+          <MenuItem
+            onClick={() => {
+              setMovePosition(listIndex + 1)
+              setView("move")
+            }}
+          >
             Di chuyển danh sách
           </MenuItem>
 
@@ -160,7 +160,6 @@ function ListMenu({
         </div>
       )}
 
-      {/* ===== COPY VIEW (TÁCH FILE) ===== */}
       {view === "copy" && (
         <CopyListView
           initialTitle={listTitle}
@@ -172,12 +171,12 @@ function ListMenu({
         />
       )}
 
-      {/* ===== MOVE VIEW ===== */}
       {view === "move" && (
         <div className="p-3 text-sm text-white/80">
           <label className="block text-xs text-white/60 mb-1">
             Bảng thông tin
           </label>
+
           <select
             disabled
             className="w-full rounded-md p-2 mb-3 bg-[#222] text-white border border-white/10"
@@ -188,20 +187,25 @@ function ListMenu({
           <label className="block text-xs text-white/60 mb-1">
             Vị trí
           </label>
+
           <select
             className="w-full rounded-md p-2 mb-3 bg-[#222] text-white border border-white/10"
             value={movePosition}
             onChange={(e) => setMovePosition(Number(e.target.value))}
           >
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-            <option value={3}>3</option>
-            <option value={4}>4</option>
-            <option value={5}>5</option>
+            {Array.from({ length: totalLists }, (_, i) => (
+              <option key={i + 1} value={i + 1}>
+                {i + 1}
+              </option>
+            ))}
           </select>
 
           <button
             className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded"
+            onClick={() => {
+              onMoveList?.(movePosition - 1)
+              onClose()
+            }}
           >
             Di chuyển
           </button>
@@ -211,8 +215,6 @@ function ListMenu({
     document.body
   )
 }
-
-/* ===== Helpers ===== */
 
 function MenuItem({ children, onClick, small }) {
   return (
