@@ -3,6 +3,10 @@ import Card from "./Card"
 import AddCard from "./AddCard"
 import ListMenu from "./ListMenu"
 
+function isCardDragEvent(e) {
+  return e.dataTransfer?.types?.includes("application/x-trello-card")
+}
+
 function List({
   list,
   listIndex,
@@ -31,6 +35,7 @@ function List({
   const headerRef = useRef(null)
   const menuButtonRef = useRef(null)
   const addCardRef = useRef(null)
+  const cardRefs = useRef({})
 
   const handleAddCard = useCallback(
     (cardTitle) => {
@@ -77,27 +82,101 @@ function List({
     return () => window.removeEventListener("mousedown", handleMouseDown)
   }, [isEditingTitle, commitRename])
 
-  const isDropAtEnd = dragCardOver?.listId === id && dragCardOver?.cardIndex === null
+  const setCardRef = useCallback((cardId, element) => {
+    if (element) {
+      cardRefs.current[cardId] = element
+      return
+    }
+
+    delete cardRefs.current[cardId]
+  }, [])
+
+  const updateCardDropPreview = useCallback(
+    (clientY) => {
+      if (cards.length === 0) {
+        onDropCardToListEnd?.(id)
+        return
+      }
+
+      let dropIndex = cards.length
+
+      for (let index = 0; index < cards.length; index += 1) {
+        const card = cards[index]
+        const element = cardRefs.current[card.id]
+        if (!element) continue
+
+        const rect = element.getBoundingClientRect()
+        const middleY = rect.top + rect.height / 2
+
+        if (clientY < middleY) {
+          dropIndex = index
+          break
+        }
+      }
+
+      if (dropIndex >= cards.length) {
+        onDropCardToListEnd?.(id)
+        return
+      }
+
+      onDragCardEnter?.(id, dropIndex)
+    },
+    [cards, id, onDragCardEnter, onDropCardToListEnd]
+  )
+
+  const handleBodyDragOver = useCallback(
+    (e) => {
+      if (!isCardDragEvent(e)) return
+      e.preventDefault()
+
+      if (cards.length === 0) {
+        onDropCardToListEnd?.(id)
+        return
+      }
+
+      updateCardDropPreview(e.clientY)
+    },
+    [cards.length, id, onDropCardToListEnd, updateCardDropPreview]
+  )
+
+  const isDropAtEnd =
+    dragCardOver?.listId === id && dragCardOver?.cardIndex === null
 
   return (
     <div
       draggable={!isEditingTitle}
       onDragStart={(e) => {
         if (isEditingTitle) return
+        if (isCardDragEvent(e)) return
         if (e.target.closest("[data-card-dragging='true']")) return
 
         e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("application/x-trello-list", id)
         e.dataTransfer.setData("text/plain", id)
+
         setIsDragging(true)
         onDragListStart?.(listIndex)
       }}
       onDragEnter={(e) => {
-        if (e.target.closest("[data-card-dragging='true']")) return
+        if (isCardDragEvent(e)) return
         e.preventDefault()
         onDragListEnter?.(listIndex)
       }}
       onDragOver={(e) => {
+        if (isCardDragEvent(e) && cards.length === 0) {
+          e.preventDefault()
+          onDropCardToListEnd?.(id)
+          return
+        }
+
+        if (isCardDragEvent(e)) return
         e.preventDefault()
+      }}
+      onDrop={(e) => {
+        if (isCardDragEvent(e) && cards.length === 0) {
+          e.preventDefault()
+          onDragCardEnd?.()
+        }
       }}
       onDragEnd={() => {
         setIsDragging(false)
@@ -182,17 +261,18 @@ function List({
       </div>
 
       <div
-        className="flex flex-col gap-2 px-1 max-h-[60vh] overflow-y-auto min-h-[24px]"
-        onDragOver={(e) => {
-          e.preventDefault()
-        }}
+        className="flex flex-col gap-2 px-1 max-h-[60vh] overflow-y-auto"
         onDragEnter={(e) => {
+          if (!isCardDragEvent(e)) return
           e.preventDefault()
+
           if (cards.length === 0) {
             onDropCardToListEnd?.(id)
           }
         }}
+        onDragOver={handleBodyDragOver}
         onDrop={(e) => {
+          if (!isCardDragEvent(e)) return
           e.preventDefault()
           onDragCardEnd?.()
         }}
@@ -208,11 +288,8 @@ function List({
               )}
 
               <div
-                onDragEnter={(e) => {
-                  e.preventDefault()
-                  onDragCardEnter?.(id, cardIndex)
-                }}
-                onDragOver={(e) => e.preventDefault()}
+                ref={(element) => setCardRef(card.id, element)}
+                className="rounded-lg"
               >
                 <Card
                   card={card}

@@ -7,6 +7,7 @@ function Card({ card, onDragStart, onDragEnd }) {
         e.stopPropagation()
         e.dataTransfer.effectAllowed = "move"
         e.dataTransfer.setData("text/plain", card.id)
+        e.dataTransfer.setData("application/x-trello-card", card.id)
         onDragStart?.()
       }}
       onDragEnd={(e) => {

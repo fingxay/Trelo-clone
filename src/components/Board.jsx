@@ -133,17 +133,32 @@ function Board() {
 
   const handleDragCardStart = useCallback((listId, cardIndex) => {
     draggedCardRef.current = { listId, cardIndex }
-    setDragCardOver({ listId, cardIndex })
+    setDragCardOver(null)
   }, [])
 
   const handleDragCardEnter = useCallback((listId, cardIndex) => {
     if (!draggedCardRef.current) return
-    setDragCardOver({ listId, cardIndex })
+
+    const dragged = draggedCardRef.current
+
+    if (dragged.listId === listId && dragged.cardIndex === cardIndex) {
+      setDragCardOver(null)
+      return
+    }
+
+    setDragCardOver((prev) => {
+      if (prev?.listId === listId && prev?.cardIndex === cardIndex) return prev
+      return { listId, cardIndex }
+    })
   }, [])
 
   const handleDropCardToListEnd = useCallback((listId) => {
     if (!draggedCardRef.current) return
-    setDragCardOver({ listId, cardIndex: null })
+
+    setDragCardOver((prev) => {
+      if (prev?.listId === listId && prev?.cardIndex === null) return prev
+      return { listId, cardIndex: null }
+    })
   }, [])
 
   const handleCommitCardDrop = useCallback(() => {
@@ -188,6 +203,11 @@ function Board() {
       if (insertIndex > nextLists[targetListIndex].cards.length) {
         insertIndex = nextLists[targetListIndex].cards.length
       }
+
+      const sameListSameIndex =
+        fromListId === toListId && insertIndex === fromCardIndex
+
+      if (sameListSameIndex) return prev
 
       nextLists[targetListIndex].cards.splice(insertIndex, 0, movedCard)
 
