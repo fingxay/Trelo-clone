@@ -11,20 +11,27 @@ function List({
   onRenameList,
   onCopyList,
   onMoveList,
+  onDragListStart,
+  onDragListEnter,
+  onDragListEnd,
+  onDragCardStart,
+  onDragCardEnter,
+  onDropCardToListEnd,
+  onDragCardEnd,
+  dragCardOver,
 }) {
   const { id, title, cards } = list
 
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(title)
   const [menuPosition, setMenuPosition] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const inputRef = useRef(null)
   const headerRef = useRef(null)
   const menuButtonRef = useRef(null)
-
   const addCardRef = useRef(null)
 
-  /* ===== ADD CARD ===== */
   const handleAddCard = useCallback(
     (cardTitle) => {
       onAddCard(id, cardTitle)
@@ -32,14 +39,13 @@ function List({
     [id, onAddCard]
   )
 
-  /* ===== RENAME LIST ===== */
   const commitRename = useCallback(() => {
     const trimmed = tempTitle.trim()
     if (trimmed && trimmed !== title) {
       onRenameList?.(id, trimmed)
     }
     setIsEditingTitle(false)
-    setTempTitle(title)
+    setTempTitle(trimmed || title)
   }, [tempTitle, title, id, onRenameList])
 
   const cancelRename = useCallback(() => {
@@ -47,7 +53,10 @@ function List({
     setTempTitle(title)
   }, [title])
 
-  /* auto focus */
+  useEffect(() => {
+    setTempTitle(title)
+  }, [title])
+
   useEffect(() => {
     if (isEditingTitle && inputRef.current) {
       inputRef.current.focus()
@@ -55,7 +64,6 @@ function List({
     }
   }, [isEditingTitle])
 
-  /* click outside header -> commit */
   useEffect(() => {
     if (!isEditingTitle) return
 
@@ -69,9 +77,33 @@ function List({
     return () => window.removeEventListener("mousedown", handleMouseDown)
   }, [isEditingTitle, commitRename])
 
+  const isDropAtEnd = dragCardOver?.listId === id && dragCardOver?.cardIndex === null
+
   return (
     <div
-      className="
+      draggable={!isEditingTitle}
+      onDragStart={(e) => {
+        if (isEditingTitle) return
+        if (e.target.closest("[data-card-dragging='true']")) return
+
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", id)
+        setIsDragging(true)
+        onDragListStart?.(listIndex)
+      }}
+      onDragEnter={(e) => {
+        if (e.target.closest("[data-card-dragging='true']")) return
+        e.preventDefault()
+        onDragListEnter?.(listIndex)
+      }}
+      onDragOver={(e) => {
+        e.preventDefault()
+      }}
+      onDragEnd={() => {
+        setIsDragging(false)
+        onDragListEnd?.()
+      }}
+      className={`
         w-72
         shrink-0
         bg-[#101204] bg-opacity-90
@@ -79,9 +111,10 @@ function List({
         px-2 py-2
         flex flex-col
         self-start
-      "
+        transition
+        ${isDragging ? "opacity-50 rotate-1" : "opacity-100"}
+      `}
     >
-      {/* ===== HEADER ===== */}
       <div
         ref={headerRef}
         className="
@@ -121,7 +154,6 @@ function List({
           />
         )}
 
-        {/* ===== MENU BUTTON ===== */}
         <button
           ref={menuButtonRef}
           className="
@@ -149,19 +181,60 @@ function List({
         </button>
       </div>
 
-      {/* ===== CARDS ===== */}
-      <div className="flex flex-col gap-2 px-1 max-h-[60vh] overflow-y-auto">
-        {cards.map((card) => (
-          <Card key={card.id} card={card} />
-        ))}
+      <div
+        className="flex flex-col gap-2 px-1 max-h-[60vh] overflow-y-auto min-h-[24px]"
+        onDragOver={(e) => {
+          e.preventDefault()
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault()
+          if (cards.length === 0) {
+            onDropCardToListEnd?.(id)
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          onDragCardEnd?.()
+        }}
+      >
+        {cards.map((card, cardIndex) => {
+          const showPlaceholder =
+            dragCardOver?.listId === id && dragCardOver?.cardIndex === cardIndex
+
+          return (
+            <div key={card.id}>
+              {showPlaceholder && (
+                <div className="h-2 rounded-md bg-sky-400/80 mb-2" />
+              )}
+
+              <div
+                onDragEnter={(e) => {
+                  e.preventDefault()
+                  onDragCardEnter?.(id, cardIndex)
+                }}
+                onDragOver={(e) => e.preventDefault()}
+              >
+                <Card
+                  card={card}
+                  onDragStart={() => onDragCardStart?.(id, cardIndex)}
+                  onDragEnd={() => onDragCardEnd?.()}
+                />
+              </div>
+            </div>
+          )
+        })}
+
+        {isDropAtEnd && <div className="h-2 rounded-md bg-sky-400/80" />}
+
+        {cards.length === 0 && isDropAtEnd && (
+          <div className="h-16 rounded-lg border-2 border-dashed border-sky-400/70 bg-sky-400/10" />
+        )}
       </div>
 
-      {/* ===== ADD CARD ===== */}
       <div className="mt-2 px-1">
         <AddCard ref={addCardRef} onAdd={handleAddCard} />
       </div>
 
-      {/* ===== MENU ===== */}
       {menuPosition && (
         <ListMenu
           position={menuPosition}

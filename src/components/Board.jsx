@@ -4,11 +4,28 @@ import List from "./list/List"
 
 const BOARD_STORAGE_KEY = "trello-clone-board"
 
+function getSafeBoard(data) {
+  if (!data || typeof data !== "object") return mockBoard
+  if (!Array.isArray(data.lists)) return mockBoard
+
+  return {
+    ...mockBoard,
+    ...data,
+    lists: data.lists.map((list) => ({
+      ...list,
+      cards: Array.isArray(list.cards) ? list.cards : [],
+    })),
+  }
+}
+
 function Board() {
   const [board, setBoard] = useState(() => {
     try {
       const savedBoard = localStorage.getItem(BOARD_STORAGE_KEY)
-      return savedBoard ? JSON.parse(savedBoard) : mockBoard
+      if (!savedBoard) return mockBoard
+
+      const parsedBoard = JSON.parse(savedBoard)
+      return getSafeBoard(parsedBoard)
     } catch {
       return mockBoard
     }
@@ -16,11 +33,15 @@ function Board() {
 
   const [isAddingList, setIsAddingList] = useState(false)
   const [newListTitle, setNewListTitle] = useState("")
+  const [dragCardOver, setDragCardOver] = useState(null)
 
   const addListRef = useRef(null)
   const inputRef = useRef(null)
+  const draggedListIndexRef = useRef(null)
+  const draggedCardRef = useRef(null)
 
-  const { title, lists } = board
+  const title = board?.title || mockBoard.title
+  const lists = Array.isArray(board?.lists) ? board.lists : []
 
   useEffect(() => {
     localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board))
@@ -60,8 +81,8 @@ function Board() {
       const copiedList = {
         id: `list-${Date.now()}`,
         title: newTitle,
-        cards: sourceList.cards.map((c) => ({
-          id: `card-${Date.now()}-${Math.random()}`,
+        cards: sourceList.cards.map((c, index) => ({
+          id: `card-${Date.now()}-${index}`,
           title: c.title,
         })),
       }
@@ -86,6 +107,103 @@ function Board() {
       return { ...prev, lists: newLists }
     })
   }, [])
+
+  const handleDragListStart = useCallback((fromIndex) => {
+    draggedListIndexRef.current = fromIndex
+  }, [])
+
+  const handleDragListEnter = useCallback((toIndex) => {
+    const fromIndex = draggedListIndexRef.current
+
+    if (fromIndex === null || fromIndex === toIndex) return
+
+    setBoard((prev) => {
+      const newLists = [...prev.lists]
+      const [moved] = newLists.splice(fromIndex, 1)
+      newLists.splice(toIndex, 0, moved)
+      return { ...prev, lists: newLists }
+    })
+
+    draggedListIndexRef.current = toIndex
+  }, [])
+
+  const handleDragListEnd = useCallback(() => {
+    draggedListIndexRef.current = null
+  }, [])
+
+  const handleDragCardStart = useCallback((listId, cardIndex) => {
+    draggedCardRef.current = { listId, cardIndex }
+    setDragCardOver({ listId, cardIndex })
+  }, [])
+
+  const handleDragCardEnter = useCallback((listId, cardIndex) => {
+    if (!draggedCardRef.current) return
+    setDragCardOver({ listId, cardIndex })
+  }, [])
+
+  const handleDropCardToListEnd = useCallback((listId) => {
+    if (!draggedCardRef.current) return
+    setDragCardOver({ listId, cardIndex: null })
+  }, [])
+
+  const handleCommitCardDrop = useCallback(() => {
+    const dragged = draggedCardRef.current
+    const over = dragCardOver
+
+    if (!dragged || !over) {
+      draggedCardRef.current = null
+      setDragCardOver(null)
+      return
+    }
+
+    const { listId: fromListId, cardIndex: fromCardIndex } = dragged
+    const { listId: toListId, cardIndex: rawToCardIndex } = over
+
+    setBoard((prev) => {
+      const sourceListIndex = prev.lists.findIndex((list) => list.id === fromListId)
+      const targetListIndex = prev.lists.findIndex((list) => list.id === toListId)
+
+      if (sourceListIndex === -1 || targetListIndex === -1) return prev
+
+      const sourceList = prev.lists[sourceListIndex]
+      if (!sourceList.cards[fromCardIndex]) return prev
+
+      const nextLists = prev.lists.map((list) => ({
+        ...list,
+        cards: [...list.cards],
+      }))
+
+      const [movedCard] = nextLists[sourceListIndex].cards.splice(fromCardIndex, 1)
+
+      let insertIndex =
+        rawToCardIndex === null
+          ? nextLists[targetListIndex].cards.length
+          : rawToCardIndex
+
+      if (fromListId === toListId && fromCardIndex < insertIndex) {
+        insertIndex -= 1
+      }
+
+      if (insertIndex < 0) insertIndex = 0
+      if (insertIndex > nextLists[targetListIndex].cards.length) {
+        insertIndex = nextLists[targetListIndex].cards.length
+      }
+
+      nextLists[targetListIndex].cards.splice(insertIndex, 0, movedCard)
+
+      return {
+        ...prev,
+        lists: nextLists,
+      }
+    })
+
+    draggedCardRef.current = null
+    setDragCardOver(null)
+  }, [dragCardOver])
+
+  const handleDragCardEnd = useCallback(() => {
+    handleCommitCardDrop()
+  }, [handleCommitCardDrop])
 
   const resetAddList = useCallback(() => {
     setIsAddingList(false)
@@ -161,6 +279,14 @@ function Board() {
               onRenameList={handleRenameList}
               onCopyList={handleCopyList}
               onMoveList={handleMoveList}
+              onDragListStart={handleDragListStart}
+              onDragListEnter={handleDragListEnter}
+              onDragListEnd={handleDragListEnd}
+              onDragCardStart={handleDragCardStart}
+              onDragCardEnter={handleDragCardEnter}
+              onDropCardToListEnd={handleDropCardToListEnd}
+              onDragCardEnd={handleDragCardEnd}
+              dragCardOver={dragCardOver}
             />
           ))}
 
