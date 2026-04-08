@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import mockBoard from "../data/mockBoard"
 import List from "./list/List"
+import CardModal from "./card/CardModal"
 
 const BOARD_STORAGE_KEY = "trello-clone-board"
 
@@ -13,7 +14,12 @@ function getSafeBoard(data) {
     ...data,
     lists: data.lists.map((list) => ({
       ...list,
-      cards: Array.isArray(list.cards) ? list.cards : [],
+      cards: Array.isArray(list.cards)
+        ? list.cards.map((card) => ({
+            ...card,
+            description: card.description || "",
+          }))
+        : [],
     })),
   }
 }
@@ -22,18 +28,19 @@ function Board() {
   const [board, setBoard] = useState(() => {
     try {
       const savedBoard = localStorage.getItem(BOARD_STORAGE_KEY)
-      if (!savedBoard) return mockBoard
+      if (!savedBoard) return getSafeBoard(mockBoard)
 
       const parsedBoard = JSON.parse(savedBoard)
       return getSafeBoard(parsedBoard)
     } catch {
-      return mockBoard
+      return getSafeBoard(mockBoard)
     }
   })
 
   const [isAddingList, setIsAddingList] = useState(false)
   const [newListTitle, setNewListTitle] = useState("")
   const [dragCardOver, setDragCardOver] = useState(null)
+  const [selectedCard, setSelectedCard] = useState(null)
 
   const addListRef = useRef(null)
   const inputRef = useRef(null)
@@ -41,7 +48,9 @@ function Board() {
   const draggedCardRef = useRef(null)
 
   const title = board?.title || mockBoard.title
-  const lists = Array.isArray(board?.lists) ? board.lists : []
+  const lists = useMemo(() => {
+    return Array.isArray(board?.lists) ? board.lists : []
+  }, [board])
 
   useEffect(() => {
     localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board))
@@ -56,7 +65,11 @@ function Board() {
               ...list,
               cards: [
                 ...list.cards,
-                { id: `card-${Date.now()}`, title: cardTitle },
+                {
+                  id: `card-${Date.now()}`,
+                  title: cardTitle,
+                  description: "",
+                },
               ],
             }
           : list
@@ -84,6 +97,7 @@ function Board() {
         cards: sourceList.cards.map((c, index) => ({
           id: `card-${Date.now()}-${index}`,
           title: c.title,
+          description: c.description || "",
         })),
       }
 
@@ -225,6 +239,51 @@ function Board() {
     handleCommitCardDrop()
   }, [handleCommitCardDrop])
 
+  const handleOpenCardModal = useCallback((list, card) => {
+    setSelectedCard({
+      listId: list.id,
+      cardId: card.id,
+    })
+  }, [])
+
+  const handleCloseCardModal = useCallback(() => {
+    setSelectedCard(null)
+  }, [])
+
+  const handleUpdateCard = useCallback((listId, cardId, updates) => {
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((list) =>
+        list.id !== listId
+          ? list
+          : {
+              ...list,
+              cards: list.cards.map((card) =>
+                card.id === cardId ? { ...card, ...updates } : card
+              ),
+            }
+      ),
+    }))
+  }, [])
+
+  const activeCardData = useMemo(() => {
+    if (!selectedCard) return null
+
+    const list = lists.find((item) => item.id === selectedCard.listId)
+    if (!list) return null
+
+    const card = list.cards.find((item) => item.id === selectedCard.cardId)
+    if (!card) return null
+
+    return {
+      listId: list.id,
+      listTitle: list.title,
+      cardId: card.id,
+      cardTitle: card.title,
+      description: card.description || "",
+    }
+  }, [lists, selectedCard])
+
   const resetAddList = useCallback(() => {
     setIsAddingList(false)
     setNewListTitle("")
@@ -281,77 +340,103 @@ function Board() {
     }
   }, [isAddingList, commitAddList, resetAddList])
 
+  useEffect(() => {
+    if (!selectedCard) return
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") handleCloseCardModal()
+    }
+
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = ""
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [selectedCard, handleCloseCardModal])
+
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
-      <div className="h-12 shrink-0 flex items-center px-4 text-white font-semibold bg-black/30 backdrop-blur">
-        {title}
-      </div>
+    <>
+      <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
+        <div className="h-12 shrink-0 flex items-center px-4 text-white font-semibold bg-black/30 backdrop-blur">
+          {title}
+        </div>
 
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full flex gap-4 p-4 overflow-x-auto items-start">
-          {lists.map((list, index) => (
-            <List
-              key={list.id}
-              list={list}
-              listIndex={index}
-              totalLists={lists.length}
-              onAddCard={handleAddCard}
-              onRenameList={handleRenameList}
-              onCopyList={handleCopyList}
-              onMoveList={handleMoveList}
-              onDragListStart={handleDragListStart}
-              onDragListEnter={handleDragListEnter}
-              onDragListEnd={handleDragListEnd}
-              onDragCardStart={handleDragCardStart}
-              onDragCardEnter={handleDragCardEnter}
-              onDropCardToListEnd={handleDropCardToListEnd}
-              onDragCardEnd={handleDragCardEnd}
-              dragCardOver={dragCardOver}
-            />
-          ))}
-
-          {!isAddingList && (
-            <div
-              className="w-72 px-3 py-2 rounded-xl text-sm text-white/70 bg-black/20 hover:bg-black/30 cursor-pointer shrink-0"
-              onClick={() => setIsAddingList(true)}
-            >
-              + Thêm danh sách khác
-            </div>
-          )}
-
-          {isAddingList && (
-            <div
-              ref={addListRef}
-              className="w-72 bg-[#101204] bg-opacity-90 rounded-xl p-2 shrink-0"
-            >
-              <input
-                ref={inputRef}
-                className="w-full rounded-md p-2 text-sm outline-none bg-white text-slate-800 mb-2"
-                placeholder="Nhập tiêu đề danh sách..."
-                value={newListTitle}
-                onChange={(e) => setNewListTitle(e.target.value)}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full flex gap-4 p-4 overflow-x-auto items-start">
+            {lists.map((list, index) => (
+              <List
+                key={list.id}
+                list={list}
+                listIndex={index}
+                totalLists={lists.length}
+                onAddCard={handleAddCard}
+                onRenameList={handleRenameList}
+                onCopyList={handleCopyList}
+                onMoveList={handleMoveList}
+                onDragListStart={handleDragListStart}
+                onDragListEnter={handleDragListEnter}
+                onDragListEnd={handleDragListEnd}
+                onDragCardStart={handleDragCardStart}
+                onDragCardEnter={handleDragCardEnter}
+                onDropCardToListEnd={handleDropCardToListEnd}
+                onDragCardEnd={handleDragCardEnd}
+                onOpenCardModal={handleOpenCardModal}
+                dragCardOver={dragCardOver}
               />
+            ))}
 
-              <div className="flex gap-2">
-                <button
-                  className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded"
-                  onClick={commitAddList}
-                >
-                  Thêm danh sách
-                </button>
-
-                <button
-                  className="text-slate-300 text-xl hover:text-white"
-                  onClick={resetAddList}
-                >
-                  ×
-                </button>
+            {!isAddingList && (
+              <div
+                className="w-72 px-3 py-2 rounded-xl text-sm text-white/70 bg-black/20 hover:bg-black/30 cursor-pointer shrink-0"
+                onClick={() => setIsAddingList(true)}
+              >
+                + Thêm danh sách khác
               </div>
-            </div>
-          )}
+            )}
+
+            {isAddingList && (
+              <div
+                ref={addListRef}
+                className="w-72 bg-[#101204] bg-opacity-90 rounded-xl p-2 shrink-0"
+              >
+                <input
+                  ref={inputRef}
+                  className="w-full rounded-md p-2 text-sm outline-none bg-white text-slate-800 mb-2"
+                  placeholder="Nhập tiêu đề danh sách..."
+                  value={newListTitle}
+                  onChange={(e) => setNewListTitle(e.target.value)}
+                />
+
+                <div className="flex gap-2">
+                  <button
+                    className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded"
+                    onClick={commitAddList}
+                  >
+                    Thêm danh sách
+                  </button>
+
+                  <button
+                    className="text-slate-300 text-xl hover:text-white"
+                    onClick={resetAddList}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      <CardModal
+        key={activeCardData ? `${activeCardData.listId}-${activeCardData.cardId}` : "empty-card"}
+        card={activeCardData}
+        onClose={handleCloseCardModal}
+        onUpdateCard={handleUpdateCard}
+      />
+    </>
   )
 }
 

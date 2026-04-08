@@ -22,6 +22,7 @@ function List({
   onDragCardEnter,
   onDropCardToListEnd,
   onDragCardEnd,
+  onOpenCardModal,
   dragCardOver,
 }) {
   const { id, title, cards } = list
@@ -293,6 +294,7 @@ function List({
               >
                 <Card
                   card={card}
+                  onClick={() => onOpenCardModal?.(list, card)}
                   onDragStart={() => onDragCardStart?.(id, cardIndex)}
                   onDragEnd={() => onDragCardEnd?.()}
                 />

@@ -1,8 +1,12 @@
-function Card({ card, onDragStart, onDragEnd }) {
+function Card({ card, onClick, onDragStart, onDragEnd }) {
   return (
     <div
       draggable
       data-card-dragging="true"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick?.()
+      }}
       onDragStart={(e) => {
         e.stopPropagation()
         e.dataTransfer.effectAllowed = "move"
