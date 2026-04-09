@@ -1,6 +1,11 @@
 function Card({ card, onClick, onDragStart, onDragEnd }) {
   const hasDescription = Boolean(card.description?.trim())
 
+  const labels = Array.isArray(card.labels) ? card.labels : []
+  const visibleLabels = labels.filter((label) => label?.color)
+
+  const hasLabelText = visibleLabels.some((label) => label.text?.trim())
+
   const checklists = Array.isArray(card.checklists) ? card.checklists : []
 
   const totalChecklistCount = checklists.reduce((total, checklist) => {
@@ -49,6 +54,26 @@ function Card({ card, onClick, onDragStart, onDragEnd }) {
         leading-snug
       "
     >
+      {visibleLabels.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {visibleLabels.map((label) => (
+            <div
+              key={label.id}
+              className={`rounded-sm ${
+                hasLabelText
+                  ? "max-w-full px-2 py-1 text-[11px] font-semibold text-slate-900 flex items-center truncate"
+                  : "h-2 w-10"
+              }`}
+              style={{ backgroundColor: label.color }}
+              title={label.text || "Nhãn"}
+            >
+              <span className={hasLabelText ? "block w-full truncate" : ""}>
+                {hasLabelText ? label.text : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="font-medium break-words">{card.title}</div>
 
       {(hasDescription || showChecklist) && (

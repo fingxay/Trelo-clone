@@ -63,6 +63,7 @@ function getSafeBoard(data) {
             ...card,
             description: card.description || "",
             checklists: normalizeChecklists(card),
+            labels: Array.isArray(card.labels) ? card.labels : [],
           }))
         : [],
     })),
@@ -115,6 +116,7 @@ function Board() {
                   title: cardTitle,
                   description: "",
                   checklists: [],
+                  labels: [],
                 },
               ],
             }
@@ -145,6 +147,7 @@ function Board() {
           title: c.title,
           description: c.description || "",
           checklists: normalizeChecklists(c),
+          labels: Array.isArray(c.labels) ? c.labels : [],
         })),
       }
 
@@ -316,6 +319,14 @@ function Board() {
                             ? updates.checklists.map(normalizeChecklist)
                             : []
                           : normalizeChecklists(card),
+                      labels:
+                        updates.labels !== undefined
+                          ? Array.isArray(updates.labels)
+                            ? updates.labels
+                            : []
+                          : Array.isArray(card.labels)
+                            ? card.labels
+                            : [],
                     }
                   : card
               ),
@@ -340,6 +351,7 @@ function Board() {
       cardTitle: card.title,
       description: card.description || "",
       checklists: normalizeChecklists(card),
+      labels: Array.isArray(card.labels) ? card.labels : [],
     }
   }, [lists, selectedCard])
 
