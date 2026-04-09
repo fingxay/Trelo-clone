@@ -1,18 +1,18 @@
 import { useState } from "react"
+import CardChecklistSection from "./CardChecklistSection"
 
 function CardModal({ card, onClose, onUpdateCard }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [draftTitle, setDraftTitle] = useState(card?.cardTitle || "")
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [draftDescription, setDraftDescription] = useState(card?.description || "")
-
   const [showChecklistPopover, setShowChecklistPopover] = useState(false)
-  const [checklistTitle, setChecklistTitle] = useState("Việc cần làm")
-  const [checklistItems, setChecklistItems] = useState([])
-  const [newChecklistItem, setNewChecklistItem] = useState("")
-  const [hasChecklist, setHasChecklist] = useState(false)
+  const [draftChecklistTitle, setDraftChecklistTitle] = useState("Việc cần làm")
+  const [newChecklistItemById, setNewChecklistItemById] = useState({})
 
   if (!card) return null
+
+  const checklists = Array.isArray(card.checklists) ? card.checklists : []
 
   const handleSaveTitle = () => {
     const trimmed = draftTitle.trim()
@@ -38,48 +38,109 @@ function CardModal({ card, onClose, onUpdateCard }) {
     setIsEditingDescription(false)
   }
 
+  const handleOpenChecklistPopover = () => {
+    setDraftChecklistTitle("Việc cần làm")
+    setShowChecklistPopover((prev) => !prev)
+  }
+
   const handleCreateChecklist = () => {
-    const trimmed = checklistTitle.trim()
+    const trimmed = draftChecklistTitle.trim()
     if (!trimmed) return
 
-    setChecklistTitle(trimmed)
-    setHasChecklist(true)
+    onUpdateCard?.(card.listId, card.cardId, {
+      checklists: [
+        ...checklists,
+        {
+          id: `checklist-${Date.now()}`,
+          title: trimmed,
+          items: [],
+        },
+      ],
+    })
+
+    setDraftChecklistTitle("Việc cần làm")
     setShowChecklistPopover(false)
   }
 
-  const handleAddChecklistItem = () => {
-    const trimmed = newChecklistItem.trim()
+  const handleRenameChecklist = (checklistId, nextTitle) => {
+    onUpdateCard?.(card.listId, card.cardId, {
+      checklists: checklists.map((checklist) =>
+        checklist.id === checklistId
+          ? { ...checklist, title: nextTitle }
+          : checklist
+      ),
+    })
+  }
+
+  const handleDeleteChecklist = (checklistId) => {
+    onUpdateCard?.(card.listId, card.cardId, {
+      checklists: checklists.filter((checklist) => checklist.id !== checklistId),
+    })
+
+    setNewChecklistItemById((prev) => {
+      const next = { ...prev }
+      delete next[checklistId]
+      return next
+    })
+  }
+
+  const handleChangeNewChecklistItem = (checklistId, value) => {
+    setNewChecklistItemById((prev) => ({
+      ...prev,
+      [checklistId]: value,
+    }))
+  }
+
+  const handleCancelNewChecklistItem = (checklistId) => {
+    setNewChecklistItemById((prev) => ({
+      ...prev,
+      [checklistId]: "",
+    }))
+  }
+
+  const handleAddChecklistItem = (checklistId) => {
+    const draftValue = newChecklistItemById[checklistId] || ""
+    const trimmed = draftValue.trim()
     if (!trimmed) return
 
-    setChecklistItems((prev) => [
+    onUpdateCard?.(card.listId, card.cardId, {
+      checklists: checklists.map((checklist) =>
+        checklist.id === checklistId
+          ? {
+              ...checklist,
+              items: [
+                ...(Array.isArray(checklist.items) ? checklist.items : []),
+                {
+                  id: `check-item-${Date.now()}`,
+                  text: trimmed,
+                  done: false,
+                },
+              ],
+            }
+          : checklist
+      ),
+    })
+
+    setNewChecklistItemById((prev) => ({
       ...prev,
-      {
-        id: `check-item-${Date.now()}`,
-        text: trimmed,
-        done: false,
-      },
-    ])
-    setNewChecklistItem("")
+      [checklistId]: "",
+    }))
   }
 
-  const handleToggleChecklistItem = (itemId) => {
-    setChecklistItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, done: !item.done } : item
-      )
-    )
+  const handleToggleChecklistItem = (checklistId, itemId) => {
+    onUpdateCard?.(card.listId, card.cardId, {
+      checklists: checklists.map((checklist) =>
+        checklist.id === checklistId
+          ? {
+              ...checklist,
+              items: (Array.isArray(checklist.items) ? checklist.items : []).map((item) =>
+                item.id === itemId ? { ...item, done: !item.done } : item
+              ),
+            }
+          : checklist
+      ),
+    })
   }
-
-  const handleDeleteChecklist = () => {
-    setChecklistItems([])
-    setChecklistTitle("Việc cần làm")
-    setHasChecklist(false)
-  }
-
-  const completedCount = checklistItems.filter((item) => item.done).length
-  const progress = checklistItems.length
-    ? Math.round((completedCount / checklistItems.length) * 100)
-    : 0
 
   return (
     <div
@@ -192,7 +253,7 @@ function CardModal({ card, onClose, onUpdateCard }) {
               <div className="relative">
                 <button
                   className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-                  onClick={() => setShowChecklistPopover((prev) => !prev)}
+                  onClick={handleOpenChecklistPopover}
                 >
                   ☑ Việc cần làm
                 </button>
@@ -228,8 +289,8 @@ function CardModal({ card, onClose, onUpdateCard }) {
                       </label>
                       <input
                         autoFocus
-                        value={checklistTitle}
-                        onChange={(e) => setChecklistTitle(e.target.value)}
+                        value={draftChecklistTitle}
+                        onChange={(e) => setDraftChecklistTitle(e.target.value)}
                         className="w-full rounded-md border border-sky-400 bg-[#1f2428] px-3 py-2 text-sm text-white outline-none"
                       />
                     </div>
@@ -311,85 +372,28 @@ function CardModal({ card, onClose, onUpdateCard }) {
               )}
             </div>
 
-            {hasChecklist && (
-              <div className="mb-2">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-white/70 text-xl">☑</span>
-                    <h3 className="text-lg font-semibold">{checklistTitle}</h3>
-                  </div>
-
-                  <button
-                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-white/80 hover:bg-white/15"
-                    onClick={handleDeleteChecklist}
-                  >
-                    Xóa
-                  </button>
-                </div>
-
-                <div className="mb-3">
-                  <div className="mb-1 text-xs text-white/60">{progress}%</div>
-                  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-sky-500 transition-all"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 mb-3">
-                  {checklistItems.map((item) => (
-                    <label
-                      key={item.id}
-                      className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-white/5"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={item.done}
-                        onChange={() => handleToggleChecklistItem(item.id)}
-                        className="mt-1"
-                      />
-                      <span
-                        className={`text-sm ${
-                          item.done ? "line-through text-white/40" : "text-white/85"
-                        }`}
-                      >
-                        {item.text}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="ml-8">
-                  <textarea
-                    value={newChecklistItem}
-                    onChange={(e) => setNewChecklistItem(e.target.value)}
-                    placeholder="Thêm một mục"
-                    className="
-                      w-full rounded-md border border-sky-400
-                      bg-[#22272b] px-3 py-2 text-sm text-white
-                      outline-none resize-none
-                    "
-                    rows={2}
-                  />
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium hover:bg-sky-500"
-                      onClick={handleAddChecklistItem}
-                    >
-                      Thêm
-                    </button>
-                    <button
-                      className="rounded-md px-3 py-2 text-sm text-white/70 hover:bg-white/10"
-                      onClick={() => setNewChecklistItem("")}
-                    >
-                      Hủy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {checklists.map((checklist) => (
+              <CardChecklistSection
+                key={checklist.id}
+                checklistTitle={checklist.title}
+                checklistItems={Array.isArray(checklist.items) ? checklist.items : []}
+                newChecklistItem={newChecklistItemById[checklist.id] || ""}
+                onChangeNewChecklistItem={(value) =>
+                  handleChangeNewChecklistItem(checklist.id, value)
+                }
+                onAddChecklistItem={() => handleAddChecklistItem(checklist.id)}
+                onToggleChecklistItem={(itemId) =>
+                  handleToggleChecklistItem(checklist.id, itemId)
+                }
+                onDeleteChecklist={() => handleDeleteChecklist(checklist.id)}
+                onRenameChecklist={(nextTitle) =>
+                  handleRenameChecklist(checklist.id, nextTitle)
+                }
+                onCancelNewChecklistItem={() =>
+                  handleCancelNewChecklistItem(checklist.id)
+                }
+              />
+            ))}
           </div>
 
           <div className="w-[380px] shrink-0 bg-[#1F2428] p-5">

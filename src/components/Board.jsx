@@ -5,6 +5,50 @@ import CardModal from "./card/CardModal"
 
 const BOARD_STORAGE_KEY = "trello-clone-board"
 
+function normalizeChecklistItem(item) {
+  return {
+    id: item?.id || `check-item-${Date.now()}`,
+    text: item?.text || "",
+    done: Boolean(item?.done),
+  }
+}
+
+function normalizeChecklist(checklist) {
+  if (!checklist || typeof checklist !== "object") {
+    return {
+      id: `checklist-${Date.now()}`,
+      title: "Việc cần làm",
+      items: [],
+    }
+  }
+
+  return {
+    id: checklist.id || `checklist-${Date.now()}`,
+    title: checklist.title || "Việc cần làm",
+    items: Array.isArray(checklist.items)
+      ? checklist.items.map(normalizeChecklistItem)
+      : [],
+  }
+}
+
+function normalizeChecklists(card) {
+  if (Array.isArray(card?.checklists)) {
+    return card.checklists.map(normalizeChecklist)
+  }
+
+  if (card?.checklist?.hasChecklist) {
+    return [
+      normalizeChecklist({
+        id: card.checklist.id,
+        title: card.checklist.title,
+        items: card.checklist.items,
+      }),
+    ]
+  }
+
+  return []
+}
+
 function getSafeBoard(data) {
   if (!data || typeof data !== "object") return mockBoard
   if (!Array.isArray(data.lists)) return mockBoard
@@ -18,6 +62,7 @@ function getSafeBoard(data) {
         ? list.cards.map((card) => ({
             ...card,
             description: card.description || "",
+            checklists: normalizeChecklists(card),
           }))
         : [],
     })),
@@ -69,6 +114,7 @@ function Board() {
                   id: `card-${Date.now()}`,
                   title: cardTitle,
                   description: "",
+                  checklists: [],
                 },
               ],
             }
@@ -98,6 +144,7 @@ function Board() {
           id: `card-${Date.now()}-${index}`,
           title: c.title,
           description: c.description || "",
+          checklists: normalizeChecklists(c),
         })),
       }
 
@@ -259,7 +306,18 @@ function Board() {
           : {
               ...list,
               cards: list.cards.map((card) =>
-                card.id === cardId ? { ...card, ...updates } : card
+                card.id === cardId
+                  ? {
+                      ...card,
+                      ...updates,
+                      checklists:
+                        updates.checklists !== undefined
+                          ? Array.isArray(updates.checklists)
+                            ? updates.checklists.map(normalizeChecklist)
+                            : []
+                          : normalizeChecklists(card),
+                    }
+                  : card
               ),
             }
       ),
@@ -281,6 +339,7 @@ function Board() {
       cardId: card.id,
       cardTitle: card.title,
       description: card.description || "",
+      checklists: normalizeChecklists(card),
     }
   }, [lists, selectedCard])
 
