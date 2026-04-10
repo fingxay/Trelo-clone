@@ -27,8 +27,9 @@ function List({
   dragCardOver,
   onArchiveList,
   onArchiveAllCardsInList,
+  onChangeListColor,
 }) {
-  const { id, title, cards } = list
+  const { id, title, cards, color } = list
 
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [tempTitle, setTempTitle] = useState(title)
@@ -189,7 +190,6 @@ function List({
       className={`
         w-72
         shrink-0
-        bg-[#101204] bg-opacity-90
         rounded-xl
         px-2 py-2
         flex flex-col
@@ -197,6 +197,9 @@ function List({
         transition
         ${isDragging ? "opacity-50 rotate-1" : "opacity-100"}
       `}
+      style={{
+        backgroundColor: color || "#101204",
+      }}
     >
       <div
         ref={headerRef}
@@ -347,6 +350,11 @@ function List({
           onArchiveAllCardsInList={() => {
             setMenuPosition(null)
             onArchiveAllCardsInList?.(list.id)
+          }}
+          listColor={color}
+          onChangeListColor={(nextColor) => {
+            setMenuPosition(null)
+            onChangeListColor?.(list.id, nextColor)
           }}
         />
       )}

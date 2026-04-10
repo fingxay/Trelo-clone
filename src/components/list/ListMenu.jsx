@@ -24,6 +24,8 @@ function ListMenu({
   onMoveAllCards,
   onArchiveList,
   onArchiveAllCardsInList,
+  onChangeListColor,
+  listColor = null,
   listTitle,
   listIndex = 0,
   totalLists = 1,
@@ -31,10 +33,7 @@ function ListMenu({
   const menuRef = useRef(null)
 
   const [view, setView] = useState("menu")
-  const [isWatching, setIsWatching] = useState(false)
   const [showColors, setShowColors] = useState(false)
-  const [showAutomation, setShowAutomation] = useState(false)
-  const [selectedColor, setSelectedColor] = useState(null)
   const [movePosition, setMovePosition] = useState(listIndex + 1)
   const [moveAllCardsTargetIndex, setMoveAllCardsTargetIndex] = useState(
     listIndex + 1 >= totalLists ? 1 : listIndex + 2
@@ -122,12 +121,6 @@ function ListMenu({
           >
             Di chuyển tất cả thẻ trong danh sách này
           </MenuItem>
-          <MenuItem>Sắp xếp theo...</MenuItem>
-
-          <MenuItem onClick={() => setIsWatching((v) => !v)}>
-            <span>Theo dõi</span>
-            {isWatching && <span>✓</span>}
-          </MenuItem>
 
           <Divider />
 
@@ -141,29 +134,16 @@ function ListMenu({
               {COLORS.map((c, i) => (
                 <button
                   key={i}
-                  onClick={() => setSelectedColor(c)}
+                  onClick={() => {
+                    onChangeListColor?.(c)
+                    onClose()
+                  }}
                   className={`h-8 rounded ${
                     c ? "" : "border border-white/20"
-                  } ${selectedColor === c ? "ring-2 ring-white" : ""}`}
+                  } ${listColor === c ? "ring-2 ring-white" : ""}`}
                   style={{ backgroundColor: c || "transparent" }}
                 />
               ))}
-            </div>
-          )}
-
-          <Divider />
-
-          <MenuItem onClick={() => setShowAutomation((v) => !v)}>
-            <span>Tự động hóa</span>
-            <span>{showAutomation ? "▴" : "▾"}</span>
-          </MenuItem>
-
-          {showAutomation && (
-            <div className="pl-3">
-              <MenuItem small>Khi thêm thẻ vào danh sách...</MenuItem>
-              <MenuItem small>Hàng ngày, sắp xếp danh sách theo...</MenuItem>
-              <MenuItem small>Thứ 2 hàng tuần, sắp xếp danh sách theo...</MenuItem>
-              <MenuItem small>Tạo quy tắc</MenuItem>
             </div>
           )}
 

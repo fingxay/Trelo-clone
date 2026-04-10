@@ -279,6 +279,15 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
     }))
   }, [])
 
+  const handleChangeListColor = useCallback((listId, nextColor) => {
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((list) =>
+        list.id === listId ? { ...list, color: nextColor } : list
+      ),
+    }))
+}, [])
+
   const handleCopyList = useCallback((sourceList, newTitle) => {
     setBoard((prev) => {
       const index = prev.lists.findIndex((l) => l.id === sourceList.id)
@@ -931,6 +940,7 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
                 onOpenCardModal={handleOpenCardModal}
                 dragCardOver={dragCardOver}
                 onArchiveList={handleArchiveList}
+                onChangeListColor={handleChangeListColor}
                 onArchiveAllCardsInList={handleArchiveAllCardsInList}
               />
             ))}
