@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { MoreHorizontal, Settings, Archive, X } from "lucide-react"
-import mockBoard from "../data/mockBoard"
+import { MoreHorizontal, Settings, Archive, X, ArrowLeft } from "lucide-react"
+import defaultBoards from "../data/mockBoard"
 import List from "./list/List"
 import CardModal from "./card/CardModal"
 import ArchivedItemsPanel from "./board/ArchivedItemsPanel"
 
-const BOARD_STORAGE_KEY = "trello-clone-board"
+const getBoardStorageKey = (boardId) => `trello-clone-board-${boardId}`
+const fallbackBoard = defaultBoards[0]
 
 function normalizeChecklistItem(item) {
   return {
@@ -52,11 +53,11 @@ function normalizeChecklists(card) {
 }
 
 function getSafeBoard(data) {
-  if (!data || typeof data !== "object") return mockBoard
-  if (!Array.isArray(data.lists)) return mockBoard
+  if (!data || typeof data !== "object") return fallbackBoard
+  if (!Array.isArray(data.lists)) return fallbackBoard
 
   return {
-    ...mockBoard,
+    ...fallbackBoard,
     ...data,
     lists: data.lists.map((list) => ({
       ...list,
@@ -101,16 +102,18 @@ function getSafeBoard(data) {
   }
 }
 
-function Board() {
+function Board({ board: initialBoard, onBack, onChangeBoard }) {
   const [board, setBoard] = useState(() => {
     try {
-      const savedBoard = localStorage.getItem(BOARD_STORAGE_KEY)
-      if (!savedBoard) return getSafeBoard(mockBoard)
+      const savedBoard = localStorage.getItem(
+        getBoardStorageKey((initialBoard || fallbackBoard).id)
+      )
+      if (!savedBoard) return getSafeBoard(initialBoard || fallbackBoard)
 
       const parsedBoard = JSON.parse(savedBoard)
       return getSafeBoard(parsedBoard)
     } catch {
-      return getSafeBoard(mockBoard)
+      return getSafeBoard(initialBoard || fallbackBoard)
     }
   })
 
@@ -120,6 +123,8 @@ function Board() {
   const [selectedCard, setSelectedCard] = useState(null)
   const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false) 
   const [isArchivedPanelOpen, setIsArchivedPanelOpen] = useState(false)
+  const [isEditingBoardTitle, setIsEditingBoardTitle] = useState(false)
+  const [boardTitleDraft, setBoardTitleDraft] = useState("")
 
   const addListRef = useRef(null)
   const inputRef = useRef(null)
@@ -128,14 +133,40 @@ function Board() {
   const draggedListIndexRef = useRef(null)
   const draggedCardRef = useRef(null)
 
-  const title = board?.title || mockBoard.title
+  const title = board?.title || fallbackBoard.title
   const lists = useMemo(() => {
     return Array.isArray(board?.lists) ? board.lists : []
   }, [board])
+  const startEditBoardTitle = useCallback(() => {
+    setBoardTitleDraft(title)
+    setIsEditingBoardTitle(true)
+  }, [title])
+
+  const cancelEditBoardTitle = useCallback(() => {
+    setBoardTitleDraft(title)
+    setIsEditingBoardTitle(false)
+  }, [title])
+
+  const commitEditBoardTitle = useCallback(() => {
+    const trimmed = boardTitleDraft.trim()
+
+    if (!trimmed) {
+      cancelEditBoardTitle()
+      return
+    }
+
+    setBoard((prev) => ({
+      ...prev,
+      title: trimmed,
+    }))
+    setIsEditingBoardTitle(false)
+  }, [boardTitleDraft, cancelEditBoardTitle])
 
   useEffect(() => {
-    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board))
-  }, [board])
+    if (!board?.id) return
+    localStorage.setItem(getBoardStorageKey(board.id), JSON.stringify(board))
+    onChangeBoard?.(board)
+  }, [board, onChangeBoard])
 
   useEffect(() => {
     if (!isBoardMenuOpen) return
@@ -685,7 +716,37 @@ function Board() {
     <>
       <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
         <div className="h-12 shrink-0 flex items-center justify-between px-4 text-white font-semibold bg-black/30 backdrop-blur relative">
-          <div>{title}</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 transition"
+              onClick={onBack}
+            >
+              <ArrowLeft size={18} />
+            </button>
+
+            {!isEditingBoardTitle ? (
+              <button
+                type="button"
+                className="rounded-md px-2 py-1 text-left text-white hover:bg-white/10 transition"
+                onClick={startEditBoardTitle}
+              >
+                {title}
+              </button>
+            ) : (
+              <input
+                autoFocus
+                value={boardTitleDraft}
+                onChange={(e) => setBoardTitleDraft(e.target.value)}
+                onBlur={commitEditBoardTitle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEditBoardTitle()
+                  if (e.key === "Escape") cancelEditBoardTitle()
+                }}
+                className="min-w-[220px] rounded-md border border-white/15 bg-white px-2 py-1 text-sm font-semibold text-slate-800 outline-none"
+              />
+            )}
+          </div>
 
           <div className="relative" ref={boardMenuRef}>
             <button
