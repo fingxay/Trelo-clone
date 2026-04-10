@@ -2,12 +2,66 @@ import { createPortal } from "react-dom"
 import { useEffect, useRef, useState } from "react"
 import CardChecklistSection from "./CardChecklistSection"
 import { LABEL_OPTIONS } from "./labelOptions"
+import CardDatePopover from "./CardDatePopover"
+
+function formatModalDate(value) {
+  if (!value) return ""
+
+  const date = new Date(value)
+  const day = date.getDate()
+  const month = date.getMonth() + 1
+
+  return `${day} thg ${month}`
+}
+
+function formatDateBadge(dates) {
+  const startDate = dates?.startDate ? new Date(dates.startDate) : null
+  const dueDate = dates?.dueDate ? new Date(dates.dueDate) : null
+
+  if (startDate && dueDate) {
+    return `${formatModalDate(startDate)} - ${formatModalDate(dueDate)}`
+  }
+
+  if (dueDate) {
+    const hours = String(dueDate.getHours()).padStart(2, "0")
+    const minutes = String(dueDate.getMinutes()).padStart(2, "0")
+    return `${hours}:${minutes} ${dueDate.getDate()} thg ${dueDate.getMonth() + 1}`
+  }
+
+  if (startDate) {
+    return formatModalDate(startDate)
+  }
+
+  return ""
+}
+
+function getDueDateBadgeClass(value) {
+  if (!value) {
+    return "bg-white/10 text-white/85 hover:bg-white/15"
+  }
+
+  const now = new Date()
+  const dueDate = new Date(value)
+  const diff = dueDate.getTime() - now.getTime()
+
+  if (diff < 0) {
+    return "bg-[#f87168] text-[#172b4d] hover:brightness-95"
+  }
+
+  if (diff < 24 * 60 * 60 * 1000) {
+    return "bg-[#f5cd47] text-[#172b4d] hover:brightness-95"
+  }
+
+  return "bg-white/10 text-white/85 hover:bg-white/15"
+}
 
 
 function CardModal({ card, onClose, onUpdateCard }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const labelsButtonRef = useRef(null)
   const labelsPopoverRef = useRef(null)
+  const dateButtonRef = useRef(null)
+  const datePopoverRef = useRef(null)
   const [draftTitle, setDraftTitle] = useState(card?.cardTitle || "")
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [draftDescription, setDraftDescription] = useState(card?.description || "")
@@ -16,6 +70,9 @@ function CardModal({ card, onClose, onUpdateCard }) {
   const [draftChecklistTitle, setDraftChecklistTitle] = useState("Việc cần làm")
   const [newChecklistItemById, setNewChecklistItemById] = useState({})
   const [labelsPopoverPosition, setLabelsPopoverPosition] = useState(null)
+  const [datePopoverPosition, setDatePopoverPosition] = useState(null)
+  const [datePopoverMaxHeight, setDatePopoverMaxHeight] = useState(null)
+  const [showDatePopover, setShowDatePopover] = useState(false)
 
   const checklists = Array.isArray(card?.checklists) ? card.checklists : []
 
@@ -61,6 +118,38 @@ function CardModal({ card, onClose, onUpdateCard }) {
 
     setShowLabelsPopover((prev) => !prev)
     setShowChecklistPopover(false)
+  }
+  const handleOpenDatePopover = () => {
+    if (dateButtonRef.current) {
+      const rect = dateButtonRef.current.getBoundingClientRect()
+      const popoverWidth = 360
+      const popoverHeight = 620
+      const gap = 8
+      const viewportPadding = 16
+
+      let top = rect.bottom + gap
+      let left = rect.left
+
+      if (top + popoverHeight > window.innerHeight - viewportPadding) {
+        top = rect.top - popoverHeight - gap
+      }
+
+      if (left + popoverWidth > window.innerWidth - viewportPadding) {
+        left = window.innerWidth - popoverWidth - viewportPadding
+      }
+
+      if (left < viewportPadding) left = viewportPadding
+      if (top < viewportPadding) top = viewportPadding
+
+      const maxHeight = window.innerHeight - top - viewportPadding
+
+      setDatePopoverPosition({ top, left })
+      setDatePopoverMaxHeight(maxHeight)
+    }
+
+    setShowDatePopover((prev) => !prev)
+    setShowChecklistPopover(false)
+    setShowLabelsPopover(false)
   }
 
   const handleToggleLabel = (option) => {
@@ -279,6 +368,39 @@ function CardModal({ card, onClose, onUpdateCard }) {
         )
       : null
 
+  const datePopover =
+    showDatePopover && datePopoverPosition
+      ? createPortal(
+          <div
+            ref={datePopoverRef}
+            className="fixed z-[100]"
+            style={{
+              top: datePopoverPosition.top,
+              left: datePopoverPosition.left,
+            }}
+          >
+            <CardDatePopover
+              maxHeight={datePopoverMaxHeight}
+              value={card.dates || null}
+              onSave={(nextDates) => {
+                onUpdateCard?.(card.listId, card.cardId, {
+                  dates: nextDates,
+                })
+                setShowDatePopover(false)
+              }}
+              onRemove={() => {
+                onUpdateCard?.(card.listId, card.cardId, {
+                  dates: null,
+                })
+                setShowDatePopover(false)
+              }}
+              onClose={() => setShowDatePopover(false)}
+            />
+          </div>,
+          document.body
+        )
+      : null
+
   return (
     <>
       <div
@@ -403,6 +525,24 @@ function CardModal({ card, onClose, onUpdateCard }) {
                   </div>
                 )}
 
+              {(card.dates?.startDate || card.dates?.dueDate) && (
+                <div className="ml-8 mb-6">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+                    Ngày
+                  </p>
+
+                  <button
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition ${getDueDateBadgeClass(
+                      card.dates?.dueDate
+                    )}`}
+                    onClick={handleOpenDatePopover}
+                  >
+                    <span>🕒</span>
+                    <span>{formatDateBadge(card.dates)}</span>
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 ml-8 mb-8">
                 <button className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10">
                   ＋ Thêm
@@ -418,9 +558,15 @@ function CardModal({ card, onClose, onUpdateCard }) {
                   </button>
                 </div>
 
-                <button className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10">
-                  ◔ Ngày
-                </button>
+                <div className="relative">
+                  <button
+                    ref={dateButtonRef}
+                    className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    onClick={handleOpenDatePopover}
+                  >
+                    ◔ Ngày
+                  </button>
+                </div>
 
                 <div className="relative">
                   <button
@@ -623,9 +769,14 @@ function CardModal({ card, onClose, onUpdateCard }) {
         </div>
       </div>
 
-      {labelsPopover}
+      <>
+        {labelsPopover}
+        {datePopover}
+      </>
     </>
   )
+
+  
 }
 
 export default CardModal

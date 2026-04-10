@@ -64,6 +64,7 @@ function getSafeBoard(data) {
             description: card.description || "",
             checklists: normalizeChecklists(card),
             labels: Array.isArray(card.labels) ? card.labels : [],
+            dates: card.dates || null,
           }))
         : [],
     })),
@@ -117,6 +118,7 @@ function Board() {
                   description: "",
                   checklists: [],
                   labels: [],
+                  dates: null,
                 },
               ],
             }
@@ -148,6 +150,7 @@ function Board() {
           description: c.description || "",
           checklists: normalizeChecklists(c),
           labels: Array.isArray(c.labels) ? c.labels : [],
+          dates: c.dates || null,
         })),
       }
 
@@ -352,6 +355,7 @@ function Board() {
       description: card.description || "",
       checklists: normalizeChecklists(card),
       labels: Array.isArray(card.labels) ? card.labels : [],
+      dates: card.dates || null,
     }
   }, [lists, selectedCard])
 

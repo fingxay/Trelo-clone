@@ -1,3 +1,50 @@
+function formatCardDate(value) {
+  if (!value) return ""
+
+  const date = new Date(value)
+  const day = date.getDate()
+  const month = date.getMonth() + 1
+
+  return `${day} thg ${month}`
+}
+
+function formatCardDateRange(dates) {
+  const startDate = dates?.startDate ? new Date(dates.startDate) : null
+  const dueDate = dates?.dueDate ? new Date(dates.dueDate) : null
+
+  if (startDate && dueDate) {
+    return `${formatCardDate(startDate)} - ${formatCardDate(dueDate)}`
+  }
+
+  if (dueDate) {
+    return formatCardDate(dueDate)
+  }
+
+  if (startDate) {
+    return formatCardDate(startDate)
+  }
+
+  return ""
+}
+
+function getCardDueDateClass(value) {
+  if (!value) return "hover:bg-slate-200/70"
+
+  const now = new Date()
+  const dueDate = new Date(value)
+  const diff = dueDate.getTime() - now.getTime()
+
+  if (diff < 0) {
+    return "bg-red-200 text-red-800"
+  }
+
+  if (diff < 24 * 60 * 60 * 1000) {
+    return "bg-amber-200 text-amber-800"
+  }
+
+  return "hover:bg-slate-200/70"
+}
+
 function Card({ card, onClick, onDragStart, onDragEnd }) {
   const hasDescription = Boolean(card.description?.trim())
 
@@ -18,6 +65,8 @@ function Card({ card, onClick, onDragStart, onDragEnd }) {
     return total + items.filter((item) => item.done).length
   }, 0)
 
+  const dueDate = card.dates?.dueDate || null
+  const dateText = formatCardDateRange(card.dates)
   const showChecklist = totalChecklistCount > 0
   const isChecklistCompleted =
     showChecklist && completedChecklistCount === totalChecklistCount
@@ -74,13 +123,25 @@ function Card({ card, onClick, onDragStart, onDragEnd }) {
           ))}
         </div>
       )}
+
       <div className="font-medium break-words">{card.title}</div>
 
-      {(hasDescription || showChecklist) && (
+      {(hasDescription || showChecklist || dateText) && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           {hasDescription && (
             <div className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-slate-200/70">
               <span className="text-sm leading-none">☰</span>
+            </div>
+          )}
+
+          {dateText && (
+            <div
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 ${getCardDueDateClass(
+                dueDate
+              )}`}
+            >
+              <span className="text-sm leading-none">🕒</span>
+              <span>{dateText}</span>
             </div>
           )}
 
