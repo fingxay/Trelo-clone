@@ -13,18 +13,16 @@ const mockBoard = {
     {
       id: "list-2",
       title: "Doing",
-      cards: [
-        { id: "card-3", title: "Build Trello UI" },
-      ],
+      cards: [{ id: "card-3", title: "Build Trello UI" }],
     },
     {
       id: "list-3",
       title: "Done",
-      cards: [
-        { id: "card-4", title: "Setup project" },
-      ],
+      cards: [{ id: "card-4", title: "Setup project" }],
     },
   ],
+  archivedLists: [],
+  archivedCards: [],
 }
 
 export default mockBoard

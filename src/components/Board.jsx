@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { MoreHorizontal, Settings, Archive, X } from "lucide-react"
 import mockBoard from "../data/mockBoard"
 import List from "./list/List"
 import CardModal from "./card/CardModal"
+import ArchivedItemsPanel from "./board/ArchivedItemsPanel"
 
 const BOARD_STORAGE_KEY = "trello-clone-board"
 
@@ -68,6 +70,34 @@ function getSafeBoard(data) {
           }))
         : [],
     })),
+    archivedLists: Array.isArray(data.archivedLists)
+      ? data.archivedLists.map((list) => ({
+          ...list,
+          cards: Array.isArray(list.cards)
+            ? list.cards.map((card) => ({
+                ...card,
+                description: card.description || "",
+                checklists: normalizeChecklists(card),
+                labels: Array.isArray(card.labels) ? card.labels : [],
+                dates: card.dates || null,
+              }))
+            : [],
+        }))
+      : [],
+    archivedCards: Array.isArray(data.archivedCards)
+      ? data.archivedCards.map((item) => ({
+          ...item,
+          card: item?.card
+            ? {
+                ...item.card,
+                description: item.card.description || "",
+                checklists: normalizeChecklists(item.card),
+                labels: Array.isArray(item.card.labels) ? item.card.labels : [],
+                dates: item.card.dates || null,
+              }
+            : null,
+        }))
+      : [],
   }
 }
 
@@ -88,9 +118,13 @@ function Board() {
   const [newListTitle, setNewListTitle] = useState("")
   const [dragCardOver, setDragCardOver] = useState(null)
   const [selectedCard, setSelectedCard] = useState(null)
+  const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false) 
+  const [isArchivedPanelOpen, setIsArchivedPanelOpen] = useState(false)
 
   const addListRef = useRef(null)
   const inputRef = useRef(null)
+  const boardMenuRef = useRef(null)
+  const archivedPanelRef = useRef(null)
   const draggedListIndexRef = useRef(null)
   const draggedCardRef = useRef(null)
 
@@ -102,6 +136,55 @@ function Board() {
   useEffect(() => {
     localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board))
   }, [board])
+
+  useEffect(() => {
+    if (!isBoardMenuOpen) return
+
+    function handleClickOutside(e) {
+      if (boardMenuRef.current && !boardMenuRef.current.contains(e.target)) {
+        setIsBoardMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setIsBoardMenuOpen(false)
+    }
+
+    window.addEventListener("mousedown", handleClickOutside)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isBoardMenuOpen])
+
+  useEffect(() => {
+    if (!isArchivedPanelOpen) return
+
+    function handleClickOutside(e) {
+      if (
+        archivedPanelRef.current &&
+        !archivedPanelRef.current.contains(e.target) &&
+        boardMenuRef.current &&
+        !boardMenuRef.current.contains(e.target)
+      ) {
+        setIsArchivedPanelOpen(false)
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setIsArchivedPanelOpen(false)
+    }
+
+    window.addEventListener("mousedown", handleClickOutside)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isArchivedPanelOpen])
 
   const handleAddCard = useCallback((listId, cardTitle) => {
     setBoard((prev) => ({
@@ -338,6 +421,173 @@ function Board() {
     }))
   }, [])
 
+  const handleArchiveList = useCallback((listId) => {
+    setBoard((prev) => {
+      const listToArchive = prev.lists.find((list) => list.id === listId)
+      if (!listToArchive) return prev
+
+      return {
+        ...prev,
+        lists: prev.lists.filter((list) => list.id !== listId),
+        archivedLists: [
+          ...(Array.isArray(prev.archivedLists) ? prev.archivedLists : []),
+          {
+            ...listToArchive,
+            archivedAt: new Date().toISOString(),
+          },
+        ],
+      }
+    })
+  }, [])
+
+  const handleArchiveCard = useCallback((listId, cardId) => {
+    setBoard((prev) => {
+      const sourceList = prev.lists.find((list) => list.id === listId)
+      if (!sourceList) return prev
+
+      const cardToArchive = sourceList.cards.find((card) => card.id === cardId)
+      if (!cardToArchive) return prev
+
+      return {
+        ...prev,
+        lists: prev.lists.map((list) =>
+          list.id !== listId
+            ? list
+            : {
+                ...list,
+                cards: list.cards.filter((card) => card.id !== cardId),
+              }
+        ),
+        archivedCards: [
+          ...(Array.isArray(prev.archivedCards) ? prev.archivedCards : []),
+          {
+            id: `archived-card-${cardToArchive.id}`,
+            listId,
+            listTitle: sourceList.title,
+            archivedAt: new Date().toISOString(),
+            card: {
+              ...cardToArchive,
+            },
+          },
+        ],
+      }
+    })
+
+    setSelectedCard((prev) => {
+      if (!prev) return prev
+      if (prev.listId === listId && prev.cardId === cardId) return null
+      return prev
+    })
+  }, [])
+
+  const handleArchiveAllCardsInList = useCallback((listId) => {
+    setBoard((prev) => {
+      const sourceList = prev.lists.find((list) => list.id === listId)
+      if (!sourceList || !Array.isArray(sourceList.cards) || sourceList.cards.length === 0) {
+        return prev
+      }
+
+      const nextArchivedCards = [
+        ...(Array.isArray(prev.archivedCards) ? prev.archivedCards : []),
+        ...sourceList.cards.map((card) => ({
+          id: `archived-card-${card.id}`,
+          listId,
+          listTitle: sourceList.title,
+          archivedAt: new Date().toISOString(),
+          card: {
+            ...card,
+          },
+        })),
+      ]
+
+      return {
+        ...prev,
+        lists: prev.lists.map((list) =>
+          list.id !== listId
+            ? list
+            : {
+                ...list,
+                cards: [],
+              }
+        ),
+        archivedCards: nextArchivedCards,
+      }
+    })
+
+    setSelectedCard((prev) => {
+      if (!prev) return prev
+      if (prev.listId === listId) return null
+      return prev
+    })
+  }, [])
+
+  const handleRestoreList = useCallback((archivedListId) => {
+    setBoard((prev) => {
+      const listToRestore = (Array.isArray(prev.archivedLists) ? prev.archivedLists : []).find(
+        (list) => list.id === archivedListId
+      )
+      if (!listToRestore) return prev
+
+      const { archivedAt: _archivedAt, ...restoredList } = listToRestore
+
+      return {
+        ...prev,
+        lists: [...prev.lists, restoredList],
+        archivedLists: prev.archivedLists.filter((list) => list.id !== archivedListId),
+      }
+    })
+  }, [])
+
+  const handleRestoreCard = useCallback((archivedCardId) => {
+    setBoard((prev) => {
+      const archivedItem = (Array.isArray(prev.archivedCards) ? prev.archivedCards : []).find(
+        (item) => item.id === archivedCardId
+      )
+      if (!archivedItem?.card) return prev
+
+      const hasActiveList = prev.lists.some((list) => list.id === archivedItem.listId)
+      const hasArchivedList = (Array.isArray(prev.archivedLists) ? prev.archivedLists : []).some(
+        (list) => list.id === archivedItem.listId
+      )
+
+      if (hasActiveList) {
+        return {
+          ...prev,
+          lists: prev.lists.map((list) =>
+            list.id !== archivedItem.listId
+              ? list
+              : {
+                  ...list,
+                  cards: list.cards.some((card) => card.id === archivedItem.card.id)
+                    ? list.cards
+                    : [...list.cards, archivedItem.card],
+                }
+          ),
+          archivedCards: prev.archivedCards.filter((item) => item.id !== archivedCardId),
+        }
+      }
+
+      if (hasArchivedList) {
+        return {
+          ...prev,
+          archivedLists: prev.archivedLists.map((list) =>
+            list.id !== archivedItem.listId
+              ? list
+              : {
+                  ...list,
+                  cards: Array.isArray(list.cards) && list.cards.some((card) => card.id === archivedItem.card.id)
+                    ? list.cards
+                    : [...(Array.isArray(list.cards) ? list.cards : []), archivedItem.card],
+                }
+          ),
+          archivedCards: prev.archivedCards.filter((item) => item.id !== archivedCardId),
+        }
+      }
+
+      return prev
+    })
+  }, [])
+
   const activeCardData = useMemo(() => {
     if (!selectedCard) return null
 
@@ -434,8 +684,67 @@ function Board() {
   return (
     <>
       <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
-        <div className="h-12 shrink-0 flex items-center px-4 text-white font-semibold bg-black/30 backdrop-blur">
-          {title}
+        <div className="h-12 shrink-0 flex items-center justify-between px-4 text-white font-semibold bg-black/30 backdrop-blur relative">
+          <div>{title}</div>
+
+          <div className="relative" ref={boardMenuRef}>
+            <button
+              type="button"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 transition"
+              onClick={() => setIsBoardMenuOpen((prev) => !prev)}
+            >
+              <MoreHorizontal size={18} />
+            </button>
+
+            {isBoardMenuOpen && (
+              <div className="absolute right-0 top-10 w-80 rounded-xl border border-white/10 bg-[#1f2430] text-white shadow-2xl overflow-hidden z-50">
+                <div className="relative flex items-center justify-center px-4 py-3 border-b border-white/10">
+                  <p className="text-sm font-semibold text-white/80">Menu</p>
+
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 inline-flex items-center justify-center rounded-md text-white/70 hover:text-white hover:bg-white/10 transition"
+                    onClick={() => setIsBoardMenuOpen(false)}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="p-2">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-left text-white/85 hover:bg-white/10 transition"
+                  >
+                    <Settings size={18} className="shrink-0" />
+                    <span>Cài đặt</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-left text-white/85 hover:bg-white/10 transition"
+                    onClick={() => {
+                      setIsArchivedPanelOpen(true)
+                      setIsBoardMenuOpen(false)
+                    }}
+                  >
+                    <Archive size={18} className="shrink-0" />
+                    <span>Mục đã lưu trữ</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div ref={archivedPanelRef} className="absolute right-4 top-0">
+            <ArchivedItemsPanel
+              open={isArchivedPanelOpen}
+              archivedLists={board.archivedLists || []}
+              archivedCards={board.archivedCards || []}
+              onClose={() => setIsArchivedPanelOpen(false)}
+              onRestoreList={handleRestoreList}
+              onRestoreCard={handleRestoreCard}
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden">
@@ -459,6 +768,8 @@ function Board() {
                 onDragCardEnd={handleDragCardEnd}
                 onOpenCardModal={handleOpenCardModal}
                 dragCardOver={dragCardOver}
+                onArchiveList={handleArchiveList}
+                onArchiveAllCardsInList={handleArchiveAllCardsInList}
               />
             ))}
 
@@ -510,6 +821,7 @@ function Board() {
         card={activeCardData}
         onClose={handleCloseCardModal}
         onUpdateCard={handleUpdateCard}
+        onArchiveCard={handleArchiveCard}
       />
     </>
   )

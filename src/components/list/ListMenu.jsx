@@ -21,6 +21,8 @@ function ListMenu({
   onAddCard,
   onCopyList,
   onMoveList,
+  onArchiveList,
+  onArchiveAllCardsInList,
   listTitle,
   listIndex = 0,
   totalLists = 1,
@@ -155,8 +157,22 @@ function ListMenu({
 
           <Divider />
 
-          <MenuItem>Lưu trữ danh sách này</MenuItem>
-          <MenuItem>Lưu trữ tất cả các thẻ trong danh sách này</MenuItem>
+          <MenuItem
+            onClick={() => {
+              onArchiveList?.()
+              onClose()
+            }}
+          >
+            Lưu trữ danh sách này
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onArchiveAllCardsInList?.()
+              onClose()
+            }}
+          >
+            Lưu trữ tất cả các thẻ trong danh sách này
+          </MenuItem>
         </div>
       )}
 

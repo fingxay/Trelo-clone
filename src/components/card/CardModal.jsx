@@ -56,7 +56,7 @@ function getDueDateBadgeClass(value) {
 }
 
 
-function CardModal({ card, onClose, onUpdateCard }) {
+function CardModal({ card, onClose, onUpdateCard, onArchiveCard }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const labelsButtonRef = useRef(null)
   const labelsPopoverRef = useRef(null)
@@ -73,6 +73,10 @@ function CardModal({ card, onClose, onUpdateCard }) {
   const [datePopoverPosition, setDatePopoverPosition] = useState(null)
   const [datePopoverMaxHeight, setDatePopoverMaxHeight] = useState(null)
   const [showDatePopover, setShowDatePopover] = useState(false)
+  const cardMenuButtonRef = useRef(null)
+  const cardMenuRef = useRef(null)
+  const [cardMenuPosition, setCardMenuPosition] = useState(null)
+  const [showCardMenu, setShowCardMenu] = useState(false)
 
   const checklists = Array.isArray(card?.checklists) ? card.checklists : []
 
@@ -150,6 +154,22 @@ function CardModal({ card, onClose, onUpdateCard }) {
     setShowDatePopover((prev) => !prev)
     setShowChecklistPopover(false)
     setShowLabelsPopover(false)
+  }
+
+  const handleOpenCardMenu = () => {
+    if (cardMenuButtonRef.current) {
+      const rect = cardMenuButtonRef.current.getBoundingClientRect()
+
+      setCardMenuPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+      })
+    }
+
+    setShowCardMenu((prev) => !prev)
+    setShowChecklistPopover(false)
+    setShowLabelsPopover(false)
+    setShowDatePopover(false)
   }
 
   const handleToggleLabel = (option) => {
@@ -294,6 +314,35 @@ function CardModal({ card, onClose, onUpdateCard }) {
     return () => window.removeEventListener("mousedown", handleMouseDown)
   }, [card, showLabelsPopover])
 
+  useEffect(() => {
+    if (!card || !showCardMenu) return
+
+    function handleMouseDown(e) {
+      if (
+        cardMenuRef.current &&
+        !cardMenuRef.current.contains(e.target) &&
+        cardMenuButtonRef.current &&
+        !cardMenuButtonRef.current.contains(e.target)
+      ) {
+        setShowCardMenu(false)
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        setShowCardMenu(false)
+      }
+    }
+
+    window.addEventListener("mousedown", handleMouseDown)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [card, showCardMenu])
+
   if (!card) return null
 
   const labelsPopover =
@@ -401,6 +450,44 @@ function CardModal({ card, onClose, onUpdateCard }) {
         )
       : null
 
+  const cardMenu =
+    showCardMenu && cardMenuPosition
+      ? createPortal(
+          <div
+            ref={cardMenuRef}
+            className="fixed z-[110] w-72 rounded-xl border border-white/10 bg-[#2c333a] p-2 shadow-2xl"
+            style={{
+              top: cardMenuPosition.top,
+              left: cardMenuPosition.left,
+            }}
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+              <div className="w-5" />
+              <h4 className="text-sm font-semibold text-white/90">Thao tác</h4>
+              <button
+                className="text-white/60 hover:text-white"
+                onClick={() => setShowCardMenu(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="pt-2">
+              <button
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-white/85 hover:bg-white/10"
+                onClick={() => {
+                  onArchiveCard?.(card.listId, card.cardId)
+                  setShowCardMenu(false)
+                }}
+              >
+                Lưu trữ
+              </button>
+            </div>
+          </div>,
+          document.body
+        )
+      : null
+
   return (
     <>
       <div
@@ -484,19 +571,36 @@ function CardModal({ card, onClose, onUpdateCard }) {
                   </div>
                 </div>
 
-                <button
-                  className="
-                    w-9 h-9 shrink-0
-                    rounded-md
-                    text-white/60
-                    hover:text-white
-                    hover:bg-white/10
-                    text-2xl leading-none
-                  "
-                  onClick={onClose}
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    ref={cardMenuButtonRef}
+                    className="
+                      w-9 h-9
+                      rounded-md
+                      text-white/60
+                      hover:text-white
+                      hover:bg-white/10
+                      text-xl leading-none
+                    "
+                    onClick={handleOpenCardMenu}
+                  >
+                    ...
+                  </button>
+
+                  <button
+                    className="
+                      w-9 h-9
+                      rounded-md
+                      text-white/60
+                      hover:text-white
+                      hover:bg-white/10
+                      text-2xl leading-none
+                    "
+                    onClick={onClose}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               {Array.isArray(card.labels) &&
@@ -772,6 +876,7 @@ function CardModal({ card, onClose, onUpdateCard }) {
       <>
         {labelsPopover}
         {datePopover}
+        {cardMenu}
       </>
     </>
   )

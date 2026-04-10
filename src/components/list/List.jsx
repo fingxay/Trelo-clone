@@ -24,6 +24,8 @@ function List({
   onDragCardEnd,
   onOpenCardModal,
   dragCardOver,
+  onArchiveList,
+  onArchiveAllCardsInList,
 }) {
   const { id, title, cards } = list
 
@@ -332,6 +334,14 @@ function List({
           onMoveList={(toIndex) => {
             setMenuPosition(null)
             onMoveList?.(list.id, toIndex)
+          }}
+          onArchiveList={() => {
+            setMenuPosition(null)
+            onArchiveList?.(list.id)
+          }}
+          onArchiveAllCardsInList={() => {
+            setMenuPosition(null)
+            onArchiveAllCardsInList?.(list.id)
           }}
         />
       )}
