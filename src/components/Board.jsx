@@ -1,107 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { MoreHorizontal, Settings, Archive, X, ArrowLeft } from "lucide-react"
-import defaultBoards from "../data/mockBoard"
 import List from "./list/List"
 import CardModal from "./card/CardModal"
-import ArchivedItemsPanel from "./board/ArchivedItemsPanel"
 import ConfirmModal from "./common/ConfirmModal"
-
-const getBoardStorageKey = (boardId) => `trello-clone-board-${boardId}`
-const fallbackBoard = defaultBoards[0]
-
-function normalizeChecklistItem(item) {
-  return {
-    id: item?.id || `check-item-${Date.now()}`,
-    text: item?.text || "",
-    done: Boolean(item?.done),
-  }
-}
-
-function normalizeChecklist(checklist) {
-  if (!checklist || typeof checklist !== "object") {
-    return {
-      id: `checklist-${Date.now()}`,
-      title: "Việc cần làm",
-      items: [],
-    }
-  }
-
-  return {
-    id: checklist.id || `checklist-${Date.now()}`,
-    title: checklist.title || "Việc cần làm",
-    items: Array.isArray(checklist.items)
-      ? checklist.items.map(normalizeChecklistItem)
-      : [],
-  }
-}
-
-function normalizeChecklists(card) {
-  if (Array.isArray(card?.checklists)) {
-    return card.checklists.map(normalizeChecklist)
-  }
-
-  if (card?.checklist?.hasChecklist) {
-    return [
-      normalizeChecklist({
-        id: card.checklist.id,
-        title: card.checklist.title,
-        items: card.checklist.items,
-      }),
-    ]
-  }
-
-  return []
-}
-
-function getSafeBoard(data) {
-  if (!data || typeof data !== "object") return fallbackBoard
-  if (!Array.isArray(data.lists)) return fallbackBoard
-
-  return {
-    ...fallbackBoard,
-    ...data,
-    lists: data.lists.map((list) => ({
-      ...list,
-      cards: Array.isArray(list.cards)
-        ? list.cards.map((card) => ({
-            ...card,
-            description: card.description || "",
-            checklists: normalizeChecklists(card),
-            labels: Array.isArray(card.labels) ? card.labels : [],
-            dates: card.dates || null,
-          }))
-        : [],
-    })),
-    archivedLists: Array.isArray(data.archivedLists)
-      ? data.archivedLists.map((list) => ({
-          ...list,
-          cards: Array.isArray(list.cards)
-            ? list.cards.map((card) => ({
-                ...card,
-                description: card.description || "",
-                checklists: normalizeChecklists(card),
-                labels: Array.isArray(card.labels) ? card.labels : [],
-                dates: card.dates || null,
-              }))
-            : [],
-        }))
-      : [],
-    archivedCards: Array.isArray(data.archivedCards)
-      ? data.archivedCards.map((item) => ({
-          ...item,
-          card: item?.card
-            ? {
-                ...item.card,
-                description: item.card.description || "",
-                checklists: normalizeChecklists(item.card),
-                labels: Array.isArray(item.card.labels) ? item.card.labels : [],
-                dates: item.card.dates || null,
-              }
-            : null,
-        }))
-      : [],
-  }
-}
+import BoardHeader from "./board/BoardHeader"
+import AddListBox from "./board/AddListBox"
+import {
+  fallbackBoard,
+  getBoardStorageKey,
+  getSafeBoard,
+} from "../utils/boardData"
+import {
+  createNewCard,
+  createCopiedCard,
+  getActiveCardData,
+  normalizeCardUpdates,
+} from "../utils/boardCardData"
 
 function Board({ board: initialBoard, onBack, onChangeBoard }) {
   const [board, setBoard] = useState(() => {
@@ -143,9 +56,15 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
   const draggedCardRef = useRef(null)
 
   const title = board?.title || fallbackBoard.title
+
   const lists = useMemo(() => {
     return Array.isArray(board?.lists) ? board.lists : []
   }, [board])
+
+  const activeCardData = useMemo(() => {
+    return getActiveCardData(lists, selectedCard)
+  }, [lists, selectedCard])
+
   const startEditBoardTitle = useCallback(() => {
     setBoardTitleDraft(title)
     setIsEditingBoardTitle(true)
@@ -191,60 +110,33 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
     setIsEditingBoardTitle(false)
   }, [boardTitleDraft, cancelEditBoardTitle])
 
-  useEffect(() => {
-    if (!board?.id) return
-    localStorage.setItem(getBoardStorageKey(board.id), JSON.stringify(board))
-    onChangeBoard?.(board)
-  }, [board, onChangeBoard])
+  const resetAddList = useCallback(() => {
+    setIsAddingList(false)
+    setNewListTitle("")
+  }, [])
 
-  useEffect(() => {
-    if (!isBoardMenuOpen) return
+  const commitAddList = useCallback(() => {
+    const trimmed = newListTitle.trim()
 
-    function handleClickOutside(e) {
-      if (boardMenuRef.current && !boardMenuRef.current.contains(e.target)) {
-        setIsBoardMenuOpen(false)
-      }
+    if (!trimmed) {
+      resetAddList()
+      return
     }
 
-    function handleKeyDown(e) {
-      if (e.key === "Escape") setIsBoardMenuOpen(false)
-    }
+    setBoard((prev) => ({
+      ...prev,
+      lists: [
+        ...prev.lists,
+        {
+          id: `list-${Date.now()}`,
+          title: trimmed,
+          cards: [],
+        },
+      ],
+    }))
 
-    window.addEventListener("mousedown", handleClickOutside)
-    window.addEventListener("keydown", handleKeyDown)
-
-    return () => {
-      window.removeEventListener("mousedown", handleClickOutside)
-      window.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [isBoardMenuOpen])
-
-  useEffect(() => {
-    if (!isArchivedPanelOpen) return
-
-    function handleClickOutside(e) {
-      if (
-        archivedPanelRef.current &&
-        !archivedPanelRef.current.contains(e.target) &&
-        boardMenuRef.current &&
-        !boardMenuRef.current.contains(e.target)
-      ) {
-        setIsArchivedPanelOpen(false)
-      }
-    }
-
-    function handleKeyDown(e) {
-      if (e.key === "Escape") setIsArchivedPanelOpen(false)
-    }
-
-    window.addEventListener("mousedown", handleClickOutside)
-    window.addEventListener("keydown", handleKeyDown)
-
-    return () => {
-      window.removeEventListener("mousedown", handleClickOutside)
-      window.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [isArchivedPanelOpen])
+    resetAddList()
+  }, [newListTitle, resetAddList])
 
   const handleAddCard = useCallback((listId, cardTitle) => {
     setBoard((prev) => ({
@@ -253,17 +145,7 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
         list.id === listId
           ? {
               ...list,
-              cards: [
-                ...list.cards,
-                {
-                  id: `card-${Date.now()}`,
-                  title: cardTitle,
-                  description: "",
-                  checklists: [],
-                  labels: [],
-                  dates: null,
-                },
-              ],
+              cards: [...list.cards, createNewCard(cardTitle)],
             }
           : list
       ),
@@ -286,7 +168,7 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
         list.id === listId ? { ...list, color: nextColor } : list
       ),
     }))
-}, [])
+  }, [])
 
   const handleCopyList = useCallback((sourceList, newTitle) => {
     setBoard((prev) => {
@@ -296,14 +178,9 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
       const copiedList = {
         id: `list-${Date.now()}`,
         title: newTitle,
-        cards: sourceList.cards.map((c, index) => ({
-          id: `card-${Date.now()}-${index}`,
-          title: c.title,
-          description: c.description || "",
-          checklists: normalizeChecklists(c),
-          labels: Array.isArray(c.labels) ? c.labels : [],
-          dates: c.dates || null,
-        })),
+        cards: sourceList.cards.map((card, cardIndex) =>
+          createCopiedCard(card, cardIndex)
+        ),
       }
 
       const newLists = [...prev.lists]
@@ -499,26 +376,7 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
           : {
               ...list,
               cards: list.cards.map((card) =>
-                card.id === cardId
-                  ? {
-                      ...card,
-                      ...updates,
-                      checklists:
-                        updates.checklists !== undefined
-                          ? Array.isArray(updates.checklists)
-                            ? updates.checklists.map(normalizeChecklist)
-                            : []
-                          : normalizeChecklists(card),
-                      labels:
-                        updates.labels !== undefined
-                          ? Array.isArray(updates.labels)
-                            ? updates.labels
-                            : []
-                          : Array.isArray(card.labels)
-                            ? card.labels
-                            : [],
-                    }
-                  : card
+                card.id === cardId ? normalizeCardUpdates(card, updates) : card
               ),
             }
       ),
@@ -696,9 +554,11 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
               ? list
               : {
                   ...list,
-                  cards: Array.isArray(list.cards) && list.cards.some((card) => card.id === archivedItem.card.id)
-                    ? list.cards
-                    : [...(Array.isArray(list.cards) ? list.cards : []), archivedItem.card],
+                  cards:
+                    Array.isArray(list.cards) &&
+                    list.cards.some((card) => card.id === archivedItem.card.id)
+                      ? list.cards
+                      : [...(Array.isArray(list.cards) ? list.cards : []), archivedItem.card],
                 }
           ),
           archivedCards: prev.archivedCards.filter((item) => item.id !== archivedCardId),
@@ -726,53 +586,60 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
     })
   }, [openConfirmModal, closeConfirmModal])
 
-  const activeCardData = useMemo(() => {
-    if (!selectedCard) return null
+  useEffect(() => {
+    if (!board?.id) return
+    localStorage.setItem(getBoardStorageKey(board.id), JSON.stringify(board))
+    onChangeBoard?.(board)
+  }, [board, onChangeBoard])
 
-    const list = lists.find((item) => item.id === selectedCard.listId)
-    if (!list) return null
+  useEffect(() => {
+    if (!isBoardMenuOpen) return
 
-    const card = list.cards.find((item) => item.id === selectedCard.cardId)
-    if (!card) return null
-
-    return {
-      listId: list.id,
-      listTitle: list.title,
-      cardId: card.id,
-      cardTitle: card.title,
-      description: card.description || "",
-      checklists: normalizeChecklists(card),
-      labels: Array.isArray(card.labels) ? card.labels : [],
-      dates: card.dates || null,
-    }
-  }, [lists, selectedCard])
-
-  const resetAddList = useCallback(() => {
-    setIsAddingList(false)
-    setNewListTitle("")
-  }, [])
-
-  const commitAddList = useCallback(() => {
-    const trimmed = newListTitle.trim()
-    if (!trimmed) {
-      resetAddList()
-      return
+    function handleClickOutside(e) {
+      if (boardMenuRef.current && !boardMenuRef.current.contains(e.target)) {
+        setIsBoardMenuOpen(false)
+      }
     }
 
-    setBoard((prev) => ({
-      ...prev,
-      lists: [
-        ...prev.lists,
-        {
-          id: `list-${Date.now()}`,
-          title: trimmed,
-          cards: [],
-        },
-      ],
-    }))
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setIsBoardMenuOpen(false)
+    }
 
-    resetAddList()
-  }, [newListTitle, resetAddList])
+    window.addEventListener("mousedown", handleClickOutside)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isBoardMenuOpen])
+
+  useEffect(() => {
+    if (!isArchivedPanelOpen) return
+
+    function handleClickOutside(e) {
+      if (
+        archivedPanelRef.current &&
+        !archivedPanelRef.current.contains(e.target) &&
+        boardMenuRef.current &&
+        !boardMenuRef.current.contains(e.target)
+      ) {
+        setIsArchivedPanelOpen(false)
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setIsArchivedPanelOpen(false)
+    }
+
+    window.addEventListener("mousedown", handleClickOutside)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isArchivedPanelOpen])
 
   useEffect(() => {
     if (isAddingList && inputRef.current) {
@@ -822,100 +689,28 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
   return (
     <>
       <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
-        <div className="h-12 shrink-0 flex items-center justify-between px-4 text-white font-semibold bg-black/30 backdrop-blur relative">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 transition"
-              onClick={onBack}
-            >
-              <ArrowLeft size={18} />
-            </button>
-
-            {!isEditingBoardTitle ? (
-              <button
-                type="button"
-                className="rounded-md px-2 py-1 text-left text-white hover:bg-white/10 transition"
-                onClick={startEditBoardTitle}
-              >
-                {title}
-              </button>
-            ) : (
-              <input
-                autoFocus
-                value={boardTitleDraft}
-                onChange={(e) => setBoardTitleDraft(e.target.value)}
-                onBlur={commitEditBoardTitle}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitEditBoardTitle()
-                  if (e.key === "Escape") cancelEditBoardTitle()
-                }}
-                className="min-w-[220px] rounded-md border border-white/15 bg-white px-2 py-1 text-sm font-semibold text-slate-800 outline-none"
-              />
-            )}
-          </div>
-
-          <div className="relative" ref={boardMenuRef}>
-            <button
-              type="button"
-              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 transition"
-              onClick={() => setIsBoardMenuOpen((prev) => !prev)}
-            >
-              <MoreHorizontal size={18} />
-            </button>
-
-            {isBoardMenuOpen && (
-              <div className="absolute right-0 top-10 w-80 rounded-xl border border-white/10 bg-[#1f2430] text-white shadow-2xl overflow-hidden z-50">
-                <div className="relative flex items-center justify-center px-4 py-3 border-b border-white/10">
-                  <p className="text-sm font-semibold text-white/80">Menu</p>
-
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 inline-flex items-center justify-center rounded-md text-white/70 hover:text-white hover:bg-white/10 transition"
-                    onClick={() => setIsBoardMenuOpen(false)}
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div className="p-2">
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-left text-white/85 hover:bg-white/10 transition"
-                  >
-                    <Settings size={18} className="shrink-0" />
-                    <span>Cài đặt</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-left text-white/85 hover:bg-white/10 transition"
-                    onClick={() => {
-                      setIsArchivedPanelOpen(true)
-                      setIsBoardMenuOpen(false)
-                    }}
-                  >
-                    <Archive size={18} className="shrink-0" />
-                    <span>Mục đã lưu trữ</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div ref={archivedPanelRef} className="absolute right-4 top-0">
-            <ArchivedItemsPanel
-              open={isArchivedPanelOpen}
-              archivedLists={board.archivedLists || []}
-              archivedCards={board.archivedCards || []}
-              onClose={() => setIsArchivedPanelOpen(false)}
-              onRestoreList={handleRestoreList}
-              onRestoreCard={handleRestoreCard}
-              onDeleteList={handleDeleteArchivedList}
-              onDeleteCard={handleDeleteArchivedCard}
-            />
-          </div>
-        </div>
+        <BoardHeader
+          onBack={onBack}
+          title={title}
+          isEditingBoardTitle={isEditingBoardTitle}
+          boardTitleDraft={boardTitleDraft}
+          setBoardTitleDraft={setBoardTitleDraft}
+          startEditBoardTitle={startEditBoardTitle}
+          commitEditBoardTitle={commitEditBoardTitle}
+          cancelEditBoardTitle={cancelEditBoardTitle}
+          boardMenuRef={boardMenuRef}
+          isBoardMenuOpen={isBoardMenuOpen}
+          setIsBoardMenuOpen={setIsBoardMenuOpen}
+          archivedPanelRef={archivedPanelRef}
+          isArchivedPanelOpen={isArchivedPanelOpen}
+          setIsArchivedPanelOpen={setIsArchivedPanelOpen}
+          archivedLists={board.archivedLists || []}
+          archivedCards={board.archivedCards || []}
+          onRestoreList={handleRestoreList}
+          onRestoreCard={handleRestoreCard}
+          onDeleteList={handleDeleteArchivedList}
+          onDeleteCard={handleDeleteArchivedCard}
+        />
 
         <div className="flex-1 overflow-hidden">
           <div className="h-full flex gap-4 p-4 overflow-x-auto items-start">
@@ -945,45 +740,16 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
               />
             ))}
 
-            {!isAddingList && (
-              <div
-                className="w-72 px-3 py-2 rounded-xl text-sm text-white/70 bg-black/20 hover:bg-black/30 cursor-pointer shrink-0"
-                onClick={() => setIsAddingList(true)}
-              >
-                + Thêm danh sách khác
-              </div>
-            )}
-
-            {isAddingList && (
-              <div
-                ref={addListRef}
-                className="w-72 bg-[#101204] bg-opacity-90 rounded-xl p-2 shrink-0"
-              >
-                <input
-                  ref={inputRef}
-                  className="w-full rounded-md p-2 text-sm outline-none bg-white text-slate-800 mb-2"
-                  placeholder="Nhập tiêu đề danh sách..."
-                  value={newListTitle}
-                  onChange={(e) => setNewListTitle(e.target.value)}
-                />
-
-                <div className="flex gap-2">
-                  <button
-                    className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded"
-                    onClick={commitAddList}
-                  >
-                    Thêm danh sách
-                  </button>
-
-                  <button
-                    className="text-slate-300 text-xl hover:text-white"
-                    onClick={resetAddList}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            )}
+            <AddListBox
+              isAddingList={isAddingList}
+              setIsAddingList={setIsAddingList}
+              addListRef={addListRef}
+              inputRef={inputRef}
+              newListTitle={newListTitle}
+              setNewListTitle={setNewListTitle}
+              commitAddList={commitAddList}
+              resetAddList={resetAddList}
+            />
           </div>
         </div>
       </div>
