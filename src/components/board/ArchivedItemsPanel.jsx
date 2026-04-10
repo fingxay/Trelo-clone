@@ -19,6 +19,8 @@ function ArchivedItemsPanel({
   onClose,
   onRestoreList,
   onRestoreCard,
+  onDeleteList,
+  onDeleteCard,
 }) {
 
   const hasArchivedLists = archivedLists.length > 0
@@ -117,13 +119,23 @@ function ArchivedItemsPanel({
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
-                      onClick={() => onRestoreList?.(list.id)}
-                    >
-                      Khôi phục
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
+                        onClick={() => onDeleteList?.(list.id)}
+                      >
+                        Xóa
+                      </button>
+
+                      <button
+                        type="button"
+                        className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+                        onClick={() => onRestoreList?.(list.id)}
+                      >
+                        Khôi phục
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -154,13 +166,23 @@ function ArchivedItemsPanel({
               </p>
             </div>
 
-            <button
-              type="button"
-              className="shrink-0 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
-              onClick={() => onRestoreCard?.(item.id)}
-            >
-              Khôi phục
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
+                onClick={() => onDeleteCard?.(item.id)}
+              >
+                Xóa
+              </button>
+
+              <button
+                type="button"
+                className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+                onClick={() => onRestoreCard?.(item.id)}
+              >
+                Khôi phục
+              </button>
+            </div>
           </div>
         </div>
       ))}

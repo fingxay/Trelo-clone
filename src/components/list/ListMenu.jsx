@@ -21,6 +21,7 @@ function ListMenu({
   onAddCard,
   onCopyList,
   onMoveList,
+  onMoveAllCards,
   onArchiveList,
   onArchiveAllCardsInList,
   listTitle,
@@ -35,6 +36,9 @@ function ListMenu({
   const [showAutomation, setShowAutomation] = useState(false)
   const [selectedColor, setSelectedColor] = useState(null)
   const [movePosition, setMovePosition] = useState(listIndex + 1)
+  const [moveAllCardsTargetIndex, setMoveAllCardsTargetIndex] = useState(
+    listIndex + 1 >= totalLists ? 1 : listIndex + 2
+  )
 
   useEffect(() => {
     function handleMouseDown(e) {
@@ -72,6 +76,7 @@ function ListMenu({
           {view === "menu" && "Thao tác"}
           {view === "copy" && "Sao chép danh sách"}
           {view === "move" && "Di chuyển danh sách"}
+          {view === "move-all-cards" && "Di chuyển toàn bộ thẻ trong danh sách"}
         </span>
 
         <button
@@ -109,7 +114,14 @@ function ListMenu({
             Di chuyển danh sách
           </MenuItem>
 
-          <MenuItem>Di chuyển tất cả thẻ trong danh sách này</MenuItem>
+          <MenuItem
+            onClick={() => {
+              setMoveAllCardsTargetIndex(listIndex + 1 >= totalLists ? 1 : listIndex + 2)
+              setView("move-all-cards")
+            }}
+          >
+            Di chuyển tất cả thẻ trong danh sách này
+          </MenuItem>
           <MenuItem>Sắp xếp theo...</MenuItem>
 
           <MenuItem onClick={() => setIsWatching((v) => !v)}>
@@ -220,6 +232,39 @@ function ListMenu({
             className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded"
             onClick={() => {
               onMoveList?.(movePosition - 1)
+              onClose()
+            }}
+          >
+            Di chuyển
+          </button>
+        </div>
+      )}
+
+      {view === "move-all-cards" && (
+        <div className="p-3 text-sm text-white/80">
+          <label className="block text-xs text-white/60 mb-1">
+            Danh sách
+          </label>
+
+          <select
+            className="w-full rounded-md p-2 mb-3 bg-[#222] text-white border border-white/10"
+            value={moveAllCardsTargetIndex}
+            onChange={(e) => setMoveAllCardsTargetIndex(Number(e.target.value))}
+          >
+            {Array.from({ length: totalLists }, (_, i) => i + 1)
+              .filter((position) => position !== listIndex + 1)
+              .map((position) => (
+                <option key={position} value={position}>
+                  {position}
+                </option>
+              ))}
+          </select>
+
+          <button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={totalLists <= 1}
+            onClick={() => {
+              onMoveAllCards?.(moveAllCardsTargetIndex - 1)
               onClose()
             }}
           >

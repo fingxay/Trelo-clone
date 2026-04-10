@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Board from "./components/Board"
 import BoardList from "./components/BoardList"
 import defaultBoards from "./data/mockBoard"
@@ -39,11 +39,11 @@ function App() {
     return boards.find((board) => board.id === selectedBoardId) || null
   }, [boards, selectedBoardId])
 
-  const handleChangeBoard = (updatedBoard) => {
+  const handleChangeBoard = useCallback((updatedBoard) => {
     setBoards((prev) =>
       prev.map((board) => (board.id === updatedBoard.id ? updatedBoard : board))
     )
-  }
+  }, [])
 
   const handleCreateBoard = () => {
     const newBoard = {

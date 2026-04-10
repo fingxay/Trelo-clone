@@ -15,6 +15,7 @@ function List({
   onRenameList,
   onCopyList,
   onMoveList,
+  onMoveAllCardsInList,
   onDragListStart,
   onDragListEnter,
   onDragListEnd,
@@ -334,6 +335,10 @@ function List({
           onMoveList={(toIndex) => {
             setMenuPosition(null)
             onMoveList?.(list.id, toIndex)
+          }}
+          onMoveAllCards={(toIndex) => {
+            setMenuPosition(null)
+            onMoveAllCardsInList?.(list.id, toIndex)
           }}
           onArchiveList={() => {
             setMenuPosition(null)

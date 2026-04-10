@@ -4,6 +4,7 @@ import defaultBoards from "../data/mockBoard"
 import List from "./list/List"
 import CardModal from "./card/CardModal"
 import ArchivedItemsPanel from "./board/ArchivedItemsPanel"
+import ConfirmModal from "./common/ConfirmModal"
 
 const getBoardStorageKey = (boardId) => `trello-clone-board-${boardId}`
 const fallbackBoard = defaultBoards[0]
@@ -121,10 +122,18 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
   const [newListTitle, setNewListTitle] = useState("")
   const [dragCardOver, setDragCardOver] = useState(null)
   const [selectedCard, setSelectedCard] = useState(null)
-  const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false) 
+  const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false)
   const [isArchivedPanelOpen, setIsArchivedPanelOpen] = useState(false)
   const [isEditingBoardTitle, setIsEditingBoardTitle] = useState(false)
   const [boardTitleDraft, setBoardTitleDraft] = useState("")
+  const [confirmState, setConfirmState] = useState({
+    open: false,
+    title: "",
+    message: "",
+    confirmText: "Xóa",
+    confirmButtonClassName: "bg-red-500 hover:bg-red-600 text-white",
+    onConfirm: null,
+  })
 
   const addListRef = useRef(null)
   const inputRef = useRef(null)
@@ -141,6 +150,26 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
     setBoardTitleDraft(title)
     setIsEditingBoardTitle(true)
   }, [title])
+
+  const closeConfirmModal = useCallback(() => {
+    setConfirmState((prev) => ({
+      ...prev,
+      open: false,
+      onConfirm: null,
+    }))
+  }, [])
+
+  const openConfirmModal = useCallback((config) => {
+    setConfirmState({
+      open: true,
+      title: config.title || "Xác nhận",
+      message: config.message || "Bạn có chắc không?",
+      confirmText: config.confirmText || "Xóa",
+      confirmButtonClassName:
+        config.confirmButtonClassName || "bg-red-500 hover:bg-red-600 text-white",
+      onConfirm: config.onConfirm || null,
+    })
+  }, [])
 
   const cancelEditBoardTitle = useCallback(() => {
     setBoardTitleDraft(title)
@@ -286,6 +315,41 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
       newLists.splice(toIndex, 0, moved)
 
       return { ...prev, lists: newLists }
+    })
+  }, [])
+
+  const handleMoveAllCardsInList = useCallback((fromListId, toListIndex) => {
+    setBoard((prev) => {
+      const sourceListIndex = prev.lists.findIndex((list) => list.id === fromListId)
+      if (sourceListIndex === -1) return prev
+      if (sourceListIndex === toListIndex) return prev
+
+      const sourceList = prev.lists[sourceListIndex]
+      if (!Array.isArray(sourceList.cards) || sourceList.cards.length === 0) return prev
+      if (!prev.lists[toListIndex]) return prev
+
+      const cardsToMove = [...sourceList.cards]
+
+      return {
+        ...prev,
+        lists: prev.lists.map((list, index) => {
+          if (index === sourceListIndex) {
+            return {
+              ...list,
+              cards: [],
+            }
+          }
+
+          if (index === toListIndex) {
+            return {
+              ...list,
+              cards: [...list.cards, ...cardsToMove],
+            }
+          }
+
+          return list
+        }),
+      }
     })
   }, [])
 
@@ -569,6 +633,23 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
     })
   }, [])
 
+  const handleDeleteArchivedList = useCallback((archivedListId) => {
+    openConfirmModal({
+      title: "Xóa danh sách đã lưu trữ",
+      message: "Danh sách này sẽ bị xóa vĩnh viễn. Bạn có chắc muốn xóa không?",
+      confirmText: "Xóa",
+      onConfirm: () => {
+        setBoard((prev) => ({
+          ...prev,
+          archivedLists: (Array.isArray(prev.archivedLists) ? prev.archivedLists : []).filter(
+            (list) => list.id !== archivedListId
+          ),
+        }))
+        closeConfirmModal()
+      },
+    })
+  }, [openConfirmModal, closeConfirmModal])
+
   const handleRestoreCard = useCallback((archivedCardId) => {
     setBoard((prev) => {
       const archivedItem = (Array.isArray(prev.archivedCards) ? prev.archivedCards : []).find(
@@ -618,6 +699,23 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
       return prev
     })
   }, [])
+
+  const handleDeleteArchivedCard = useCallback((archivedCardId) => {
+    openConfirmModal({
+      title: "Xóa thẻ đã lưu trữ",
+      message: "Thẻ này sẽ bị xóa vĩnh viễn. Bạn có chắc muốn xóa không?",
+      confirmText: "Xóa",
+      onConfirm: () => {
+        setBoard((prev) => ({
+          ...prev,
+          archivedCards: (Array.isArray(prev.archivedCards) ? prev.archivedCards : []).filter(
+            (item) => item.id !== archivedCardId
+          ),
+        }))
+        closeConfirmModal()
+      },
+    })
+  }, [openConfirmModal, closeConfirmModal])
 
   const activeCardData = useMemo(() => {
     if (!selectedCard) return null
@@ -716,7 +814,7 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
     <>
       <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
         <div className="h-12 shrink-0 flex items-center justify-between px-4 text-white font-semibold bg-black/30 backdrop-blur relative">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               className="h-8 w-8 inline-flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 transition"
@@ -804,6 +902,8 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
               onClose={() => setIsArchivedPanelOpen(false)}
               onRestoreList={handleRestoreList}
               onRestoreCard={handleRestoreCard}
+              onDeleteList={handleDeleteArchivedList}
+              onDeleteCard={handleDeleteArchivedCard}
             />
           </div>
         </div>
@@ -820,6 +920,7 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
                 onRenameList={handleRenameList}
                 onCopyList={handleCopyList}
                 onMoveList={handleMoveList}
+                onMoveAllCardsInList={handleMoveAllCardsInList}
                 onDragListStart={handleDragListStart}
                 onDragListEnter={handleDragListEnter}
                 onDragListEnd={handleDragListEnd}
@@ -883,6 +984,16 @@ function Board({ board: initialBoard, onBack, onChangeBoard }) {
         onClose={handleCloseCardModal}
         onUpdateCard={handleUpdateCard}
         onArchiveCard={handleArchiveCard}
+      />
+
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        confirmButtonClassName={confirmState.confirmButtonClassName}
+        onConfirm={() => confirmState.onConfirm?.()}
+        onClose={closeConfirmModal}
       />
     </>
   )
